@@ -4,8 +4,6 @@ import msal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-# --- KONFIGURASI DARI ENVIRONMENT VARIABLES ---
-# Membaca konfigurasi yang sudah kamu atur di Azure App Service
 TENANT_ID = os.getenv("TENANT_ID")
 BOT_CLIENT_ID = os.getenv("BOT_CLIENT_ID")
 BOT_CLIENT_SECRET = os.getenv("BOT_CLIENT_SECRET")
@@ -15,7 +13,6 @@ GRAPH_CHANNEL_ID = os.getenv("GRAPH_CHANNEL_ID")
 AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
 GRAPH_SCOPE = ["https://graph.microsoft.com/.default"]
 
-# --- FUNGSI OTENTIKASI (Diperbarui untuk Bot) ---
 def get_graph_token():
     """Mendapatkan access token untuk Graph API menggunakan identitas Bot."""
     if not all([TENANT_ID, BOT_CLIENT_ID, BOT_CLIENT_SECRET]):
@@ -36,7 +33,6 @@ def get_graph_token():
         print(f"Gagal mendapatkan token: {result.get('error_description')}")
         return None
 
-# --- FUNGSI PENGIRIM NOTIFIKASI BARU ---
 def send_adaptive_card_to_teams(access_token: str, incident_data: dict):
     """Mengirim notifikasi dalam format Adaptive Card ke channel Teams via Graph API."""
     if not all([GRAPH_TEAM_ID, GRAPH_CHANNEL_ID]):
@@ -91,7 +87,7 @@ def send_adaptive_card_to_teams(access_token: str, incident_data: dict):
     else:
         print(f"Gagal mengirim notifikasi: {response.status_code} - {response.text}")
 
-# --- API UTAMA ---
+# API Utama
 class IncidentPayload(BaseModel):
     incident_title: str
     user_principal_name: str
