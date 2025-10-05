@@ -1,0 +1,127 @@
+{
+  "id": "/subscriptions/9b18a538-d882-43a9-a312-3b72c86c5994/resourceGroups/dlp_automation_development/providers/Microsoft.OperationalInsights/workspaces/law-skripsi-dlp/providers/Microsoft.SecurityInsights/Incidents/0f43a2f0-96be-4706-ada7-c1c7197abad7",
+  "name": "0f43a2f0-96be-4706-ada7-c1c7197abad7",
+  "etag": "\"5500eff2-0000-0100-0000-68d3ffbf0000\"",
+  "type": "Microsoft.SecurityInsights/Incidents",
+  "properties": {
+    "title": "DLP policy (Custom policy Automation) matched for document (Test Document.docx) in OneDrive involving one user",
+    "severity": "High",
+    "status": "New",
+    "owner": {
+      "objectId": null,
+      "email": null,
+      "assignedTo": null,
+      "userPrincipalName": null
+    },
+    "labels": [],
+    "firstActivityTimeUtc": "2025-09-24T14:19:00Z",
+    "lastActivityTimeUtc": "2025-09-24T14:20:00Z",
+    "lastModifiedTimeUtc": "2025-09-24T14:24:28.6366667Z",
+    "createdTimeUtc": "2025-09-24T14:24:28.47Z",
+    "incidentNumber": 30,
+    "additionalData": {
+      "alertsCount": 1,
+      "bookmarksCount": 0,
+      "commentsCount": 0,
+      "alertProductNames": [
+        "Microsoft Data Loss Prevention"
+      ],
+      "tactics": [
+        "Exfiltration"
+      ],
+      "techniques": []
+    },
+    "relatedAnalyticRuleIds": [],
+    "incidentUrl": "https://portal.azure.com/#asset/Microsoft_Azure_Security_Insights/Incident/subscriptions/9b18a538-d882-43a9-a312-3b72c86c5994/resourceGroups/dlp_automation_development/providers/Microsoft.OperationalInsights/workspaces/law-skripsi-dlp/providers/Microsoft.SecurityInsights/Incidents/0f43a2f0-96be-4706-ada7-c1c7197abad7",
+    "providerName": "Microsoft XDR",
+    "providerIncidentId": "302",
+    "alerts": [
+      {
+        "id": "/subscriptions/9b18a538-d882-43a9-a312-3b72c86c5994/resourceGroups/dlp_automation_development/providers/Microsoft.OperationalInsights/workspaces/law-skripsi-dlp/providers/Microsoft.SecurityInsights/Entities/",
+        "type": "Microsoft.SecurityInsights/Entities",
+        "kind": "SecurityAlert",
+        "properties": {
+          "systemAlertId": "033827b7-10fb-cc6a-7336-c77f9fe077d3",
+          "tactics": [
+            "Exfiltration"
+          ],
+          "alertDisplayName": "DLP policy (Custom policy Automation) matched for document (Test Document.docx) in OneDrive",
+          "description": "",
+          "confidenceLevel": "Unknown",
+          "severity": "High",
+          "vendorName": "Microsoft",
+          "productName": "Microsoft Data Loss Prevention",
+          "alertType": "e7dd7419-4be4-4269-9d59-133983a736f4",
+          "processingEndTime": "2025-09-24T14:24:28.99Z",
+          "status": "New",
+          "endTimeUtc": "2025-09-24T14:20:00Z",
+          "startTimeUtc": "2025-09-24T14:19:00Z",
+          "timeGenerated": "2025-09-24T14:24:28.0466667Z",
+          "providerAlertId": "3b3520a4-b186-a51f-e800-08ddfb757211",
+          "alertLink": "https://security.microsoft.com/alerts/dl3b3520a4-b186-a51f-e800-08ddfb757211?tid=9201e3bc-530f-4d7d-947a-ce7f62d70a76",
+          "resourceIdentifiers": [
+            {
+              "type": "LogAnalytics",
+              "workspaceId": "0b3af8d0-c7a2-4b70-a3e6-2f22603d7f3f"
+            }
+          ],
+          "additionalData": {
+            "IncidentId": "302",
+            "OriginSource": "Microsoft 365 defender",
+            "Category": "Exfiltration",
+            "DetectionSource": "microsoftDataLossPrevention",
+            "AssignedTo": null,
+            "Determination": null,
+            "Classification": null,
+            "ThreatName": null,
+            "ThreatFamilyName": null,
+            "DetectorId": "e7dd7419-4be4-4269-9d59-133983a736f4",
+            "LastUpdated": "09/24/2025 14:24:28"
+          },
+          "friendlyName": "DLP policy (Custom policy Automation) matched for document (Test Document.docx) in OneDrive"
+        }
+      }
+    ],
+    "bookmarks": [],
+    "relatedEntities": [
+      {
+        "id": "/subscriptions/9b18a538-d882-43a9-a312-3b72c86c5994/resourceGroups/dlp_automation_development/providers/Microsoft.OperationalInsights/workspaces/law-skripsi-dlp/providers/Microsoft.SecurityInsights/Entities/",
+        "type": "Microsoft.SecurityInsights/Entities",
+        "kind": "Account",
+        "properties": {
+          "accountName": "Admin IWP",
+          "upnSuffix": "vxqrf.onmicrosoft.com",
+          "sid": "S-1-12-1-957754600-1248907394-1121661102-1280462000",
+          "aadUserId": "39162ce8-d082-4a70-ae30-db42b04c524c",
+          "isDomainJoined": true,
+          "additionalData": {
+            "UserPrincipalName": "adminiwp@vxqrf.onmicrosoft.com",
+            "AccountName": "adminiwp"
+          },
+          "friendlyName": "Admin IWP"
+        }
+      },
+      {
+        "id": "/subscriptions/9b18a538-d882-43a9-a312-3b72c86c5994/resourceGroups/dlp_automation_development/providers/Microsoft.OperationalInsights/workspaces/law-skripsi-dlp/providers/Microsoft.SecurityInsights/Entities/",
+        "type": "Microsoft.SecurityInsights/Entities",
+        "kind": "File",
+        "properties": {
+          "directory": "https://vxqrf-my.sharepoint.com/personal/adminiwp_vxqrf_onmicrosoft_com/Documents",
+          "fileName": "Test%20Document.docx",
+          "friendlyName": "Test%20Document.docx"
+        }
+      },
+      {
+        "id": "/subscriptions/9b18a538-d882-43a9-a312-3b72c86c5994/resourceGroups/dlp_automation_development/providers/Microsoft.OperationalInsights/workspaces/law-skripsi-dlp/providers/Microsoft.SecurityInsights/Entities/",
+        "type": "Microsoft.SecurityInsights/Entities",
+        "kind": "CloudApplication",
+        "properties": {
+          "appId": 15600,
+          "appName": "Microsoft OneDrive for Business",
+          "friendlyName": "Microsoft OneDrive for Business"
+        }
+      }
+    ],
+    "comments": []
+  }
+}
