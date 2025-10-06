@@ -14,7 +14,7 @@ click==8.3.0
 colorama==0.4.6
 cryptography==46.0.1
 dataclasses==0.6
-fastapi==0.117.1
+fastapi==0.118.0
 frozenlist==1.7.0
 greenlet==3.2.4
 h11==0.16.0
@@ -44,7 +44,7 @@ opentelemetry-semantic-conventions==0.58b0
 propcache==0.3.2
 psycopg2-binary==2.9.10
 pycparser==2.23
-pydantic==2.11.9
+pydantic==2.11.10
 pydantic_core==2.33.2
 PyJWT==2.10.1
 python-dotenv==1.1.1
