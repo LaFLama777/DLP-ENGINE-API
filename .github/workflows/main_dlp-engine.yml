@@ -39,9 +39,6 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     
     steps:
       - name: Download artifact from build job
@@ -52,9 +49,9 @@ jobs:
       - name: Login to Azure
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D3DE827DA83F4F9885C1CC7790D0074D }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_57CA9D22551D47C486A0B3193DA0999F }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BEA9B4522B434F0B9B42CBCE7ED5A35D }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_2c7848c1-d369-466e-915b-b49e8633ec76 }} 
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_9201e3bc-530f-4d7d-947a-ce7f62d70a76 }} 
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_9b18a538-d882-43a9-a312-3b72c86c5994 }} 
 
       - name: 'Deploy to Azure Web App'
         id: deploy-to-webapp
