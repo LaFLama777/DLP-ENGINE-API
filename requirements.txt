@@ -42,6 +42,7 @@ opentelemetry-api==1.37.0
 opentelemetry-sdk==1.37.0
 opentelemetry-semantic-conventions==0.58b0
 propcache==0.3.2
+psycopg2-binary==2.9.10
 pycparser==2.23
 pydantic==2.11.9
 pydantic_core==2.33.2
