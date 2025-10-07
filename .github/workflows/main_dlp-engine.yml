@@ -60,3 +60,4 @@ jobs:
           app-name: 'dlp-engine'
           slot-name: 'Production'
           package: release.zip
+          skip-app-build: true
