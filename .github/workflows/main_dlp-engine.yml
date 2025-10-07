@@ -48,7 +48,7 @@ jobs:
         with:
           name: python-app
 
-      - name: Unzip artifact
+      - name: Unzip artifact for deployment
         run: unzip release.zip
 
       - name: Login to Azure
@@ -62,5 +62,5 @@ jobs:
         uses: azure/webapps-deploy@v2
         with:
           app-name: 'dlp-engine'
-          package: release.zip
+          package: '.'
           skip-app-build: true
