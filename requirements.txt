@@ -16,6 +16,8 @@ cryptography==46.0.1
 dataclasses==0.6
 fastapi==0.118.0
 frozenlist==1.7.0
+Flask==2.3.3
+gunicorn==21.2.0 
 greenlet==3.2.4
 h11==0.16.0
 h2==4.3.0
