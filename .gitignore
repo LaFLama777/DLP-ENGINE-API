@@ -1,7 +1,22 @@
-.env
-venv/
-.venv/
+# Byte-compiled / optimized / DLL files
 __pycache__/
-*.pyc
-.vscode/
+*.py[cod]
+*$py.class
+venv/
+env/
+.venv/
+.env
+.env.*
 *.db
+*.sqlite
+.vscode/
+.idea/
+*.swp
+*.swo
+*.log
+*.sql
+*.sqlite3
+*.pyc
+build/
+dist/
+*.egg-info/
