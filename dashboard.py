@@ -3,7 +3,7 @@ import pandas as pd
 import requests
 import os
 from dotenv import load_dotenv  # Load from .env file
-
+#python -m streamlit run dashboard.py
 # Load environment variables from .env file
 load_dotenv()
 
