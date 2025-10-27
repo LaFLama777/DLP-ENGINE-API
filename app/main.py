@@ -5,7 +5,6 @@ from datetime import datetime
 from typing import Dict, Any
 import logging
 import traceback
-
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, HTMLResponse
