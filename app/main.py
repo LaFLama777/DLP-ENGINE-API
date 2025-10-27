@@ -35,7 +35,6 @@ from app.decision_engine import (
 
 # Load environment
 load_dotenv()
-
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
