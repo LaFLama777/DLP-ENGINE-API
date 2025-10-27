@@ -32,7 +32,6 @@ from app.decision_engine import (
     FileContext,
     OffenseHistory
 )
-
 # Load environment
 load_dotenv()
 # Configure logging
