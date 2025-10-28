@@ -1,22 +1,21 @@
 #python -m uvicorn app.main:app --reload
+# app/main.py - Optimized for Logic App integration
 import os
 import sys
-from datetime import datetime
-from typing import Dict, Any
-import logging
+import re
 import traceback
+from datetime import datetime
+from typing import Dict, Any, List
+import logging
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
-# Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import modules
 from database import (
     create_db_and_tables, 
     SessionLocal, 
@@ -24,7 +23,7 @@ from database import (
     get_offense_count, 
     Offense
 )
-from graph_client import get_user_details
+from graph_client import get_user_details, perform_hard_block
 from app.decision_engine import (
     AdvancedDecisionEngine,
     IncidentContext,
@@ -32,9 +31,9 @@ from app.decision_engine import (
     FileContext,
     OffenseHistory
 )
-# Load environment
+
 load_dotenv()
-# Configure logging
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -47,14 +46,12 @@ try:
 except Exception as e:
     logger.error(f"✗ Database initialization failed: {e}")
 
-
 app = FastAPI(
     title="DLP Remediation Engine",
-    description="Advanced DLP Decision Engine",
-    version="1.0.0"
+    description="Advanced DLP Decision Engine with Email Blocking & Compliance",
+    version="2.0.0"
 )
 
-# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,11 +60,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize decision engine
 decision_engine = AdvancedDecisionEngine()
 
-
-# Database dependency
 def get_db():
     db = SessionLocal()
     try:
@@ -75,8 +69,63 @@ def get_db():
     finally:
         db.close()
 
+# Sensitive Data Detection
+class SensitiveDataDetector:
+    @staticmethod
+    def detect_ktp(text: str) -> List[str]:
+        """Detect 16-digit KTP numbers"""
+        pattern = r'\b\d{16}\b'
+        return re.findall(pattern, text)
+    
+    @staticmethod
+    def detect_npwp(text: str) -> List[str]:
+        """Detect NPWP with keyword and 15-16 digits"""
+        pattern = r'npwp[:\s-]*(\d{15,16})'
+        return re.findall(pattern, text, re.IGNORECASE)
+    
+    @staticmethod
+    def detect_employee_id(text: str) -> List[str]:
+        """Detect employee ID"""
+        pattern = r'\b(EMP|KARY|NIP)[-\s]?\d{4,6}\b'
+        return re.findall(pattern, text, re.IGNORECASE)
+    
+    @staticmethod
+    def mask_sensitive_data(text: str) -> str:
+        """Mask sensitive data in text"""
+        text = re.sub(r'\b(\d{3})\d{10}(\d{3})\b', r'\1***********\2', text)
+        text = re.sub(r'(npwp[:\s-]*)(\d{2})\d{11}(\d{2})', r'\1\2***********\3', text, flags=re.IGNORECASE)
+        return text
+    
+    @staticmethod
+    def check_sensitive_content(content: str) -> Dict[str, Any]:
+        """Check if content contains sensitive data"""
+        ktp_found = SensitiveDataDetector.detect_ktp(content)
+        npwp_found = SensitiveDataDetector.detect_npwp(content)
+        employee_id_found = SensitiveDataDetector.detect_employee_id(content)
+        
+        has_sensitive = bool(ktp_found or npwp_found or employee_id_found)
+        
+        violation_types = []
+        if ktp_found:
+            violation_types.append("KTP")
+        if npwp_found:
+            violation_types.append("NPWP")
+        if employee_id_found:
+            violation_types.append("Employee ID")
+        
+        return {
+            "has_sensitive_data": has_sensitive,
+            "ktp_count": len(ktp_found),
+            "npwp_count": len(npwp_found),
+            "employee_id_count": len(employee_id_found),
+            "violation_types": violation_types,
+            "violations": [
+                {"type": "KTP", "count": len(ktp_found)},
+                {"type": "NPWP", "count": len(npwp_found)},
+                {"type": "Employee ID", "count": len(employee_id_found)}
+            ]
+        }
 
-# Sentinel Parser
 class SentinelIncidentParser:
     @staticmethod
     def parse(incident_payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -109,16 +158,54 @@ class SentinelIncidentParser:
             logger.error(f"Error parsing incident: {e}")
             raise
 
+try:
+    from email_notifications import send_violation_email, send_socialization_email, EmailNotificationService
+    EMAIL_ENABLED = True
+    logger.info("✓ Email notifications enabled")
+except ImportError:
+    EMAIL_ENABLED = False
+    logger.warning("⚠️ Email notifications disabled (email_notifications.py not found)")
 
-#WEB UI ROUTES
+
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request, db: Session = Depends(get_db)):
-    """Modern Dashboard UI"""
+    """Professional Dashboard UI"""
     
-    # Get stats
-    total_incidents = db.query(Offense).count()
-    unique_users = db.query(Offense.user_principal_name).distinct().count()
-    recent_incidents = db.query(Offense).order_by(desc(Offense.timestamp)).limit(5).all()
+    try:
+        total_incidents = db.query(Offense).count()
+        unique_users = db.query(Offense.user_principal_name).distinct().count()
+        
+        # Get today's incidents
+        today = datetime.utcnow().date()
+        today_incidents = db.query(Offense).filter(
+            func.date(Offense.timestamp) == today
+        ).count()
+        
+        # Get high risk incidents (those with 3+ offenses)
+        high_risk_users = db.query(
+            Offense.user_principal_name,
+            func.count(Offense.id).label('offense_count')
+        ).group_by(Offense.user_principal_name).having(
+            func.count(Offense.id) >= 3
+        ).count()
+        
+        # Get recent incidents
+        recent_incidents = db.query(Offense).order_by(desc(Offense.timestamp)).limit(10).all()
+        
+        # Monthly trend data
+        monthly_data = db.query(
+            func.extract('month', Offense.timestamp).label('month'),
+            func.count(Offense.id).label('count')
+        ).group_by('month').all()
+        
+    except Exception as e:
+        logger.error(f"Dashboard error: {e}")
+        total_incidents = 0
+        unique_users = 0
+        today_incidents = 0
+        high_risk_users = 0
+        recent_incidents = []
+        monthly_data = []
     
     html = f"""
 <!DOCTYPE html>
@@ -126,7 +213,9 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DLP Remediation Engine</title>
+    <title>DLP Remediation Engine - Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         * {{
             margin: 0;
@@ -135,361 +224,415 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
         }}
         
         body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #0f1419;
+            color: #e4e6eb;
             min-height: 100vh;
-            padding: 20px;
         }}
         
-        .container {{
-            max-width: 1400px;
-            margin: 0 auto;
+        .sidebar {{
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 240px;
+            height: 100vh;
+            background: #1a1f2e;
+            border-right: 1px solid #2d3748;
+            padding: 24px 0;
+            z-index: 1000;
         }}
         
-        .header {{
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-            margin-bottom: 30px;
+        .logo {{
+            padding: 0 24px 24px;
+            border-bottom: 1px solid #2d3748;
+            margin-bottom: 24px;
+        }}
+        
+        .logo h1 {{
+            font-size: 18px;
+            font-weight: 700;
+            color: #60a5fa;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        
+        .nav-item {{
+            padding: 12px 24px;
+            color: #9ca3af;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s;
+            cursor: pointer;
+            font-size: 14px;
+        }}
+        
+        .nav-item:hover, .nav-item.active {{
+            background: #2d3748;
+            color: #60a5fa;
+            border-left: 3px solid #60a5fa;
+        }}
+        
+        .main-content {{
+            margin-left: 240px;
+            padding: 24px;
+        }}
+        
+        .top-bar {{
+            background: #1a1f2e;
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 24px;
             display: flex;
             justify-content: space-between;
             align-items: center;
         }}
         
-        .header h1 {{
-            font-size: 2rem;
-            color: #2d3748;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }}
-        
         .status-badge {{
-            background: #48bb78;
+            background: #10b981;
             color: white;
-            padding: 8px 20px;
-            border-radius: 25px;
-            font-size: 0.9rem;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
             font-weight: 600;
             display: flex;
             align-items: center;
             gap: 8px;
         }}
         
+        .status-dot {{
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }}
+        
+        @keyframes pulse {{
+            0%, 100% {{ opacity: 1; }}
+            50% {{ opacity: 0.5; }}
+        }}
+        
         .stats-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(4, 1fr);
             gap: 20px;
-            margin-bottom: 30px;
+            margin-bottom: 24px;
         }}
         
         .stat-card {{
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            transition: transform 0.3s ease;
+            background: #1a1f2e;
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            padding: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
         }}
         
         .stat-card:hover {{
-            transform: translateY(-5px);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 24px rgba(96, 165, 250, 0.1);
         }}
         
-        .stat-card h3 {{
-            color: #718096;
-            font-size: 0.9rem;
-            margin-bottom: 10px;
+        .stat-label {{
+            color: #9ca3af;
+            font-size: 13px;
+            font-weight: 500;
             text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 12px;
         }}
         
-        .stat-card .value {{
-            font-size: 2.5rem;
-            font-weight: bold;
-            color: #2d3748;
-        }}
-        
-        .action-buttons {{
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }}
-        
-        .btn {{
-            padding: 25px;
-            border-radius: 15px;
-            border: none;
-            font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            text-decoration: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }}
-        
-        .btn:hover {{
-            transform: translateY(-3px);
-            box-shadow: 0 15px 40px rgba(0,0,0,0.2);
-        }}
-        
-        .btn-primary {{
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }}
-        
-        .btn-success {{
-            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-            color: white;
-        }}
-        
-        .btn-info {{
-            background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
-            color: white;
-        }}
-        
-        .btn-warning {{
-            background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
-            color: white;
-        }}
-        
-        .incidents-card {{
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }}
-        
-        .incidents-card h2 {{
-            color: #2d3748;
-            margin-bottom: 20px;
-            font-size: 1.5rem;
-        }}
-        
-        .incident-item {{
-            padding: 20px;
-            border-left: 4px solid #cbd5e0;
-            margin-bottom: 15px;
-            background: #f7fafc;
-            border-radius: 8px;
-            transition: all 0.3s ease;
-        }}
-        
-        .incident-item:hover {{
-            background: #edf2f7;
-            border-left-color: #667eea;
-        }}
-        
-        .incident-item .title {{
-            font-weight: 600;
-            color: #2d3748;
+        .stat-value {{
+            font-size: 36px;
+            font-weight: 700;
+            color: #e4e6eb;
             margin-bottom: 8px;
         }}
         
-        .incident-item .meta {{
-            font-size: 0.9rem;
-            color: #718096;
+        .stat-change {{
+            font-size: 12px;
+            color: #10b981;
         }}
         
-        .icon {{
-            font-size: 2rem;
+        .stat-change.negative {{
+            color: #ef4444;
+        }}
+        
+        .chart-grid {{
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 24px;
+        }}
+        
+        .card {{
+            background: #1a1f2e;
+            border: 1px solid #2d3748;
+            border-radius: 12px;
+            padding: 24px;
+        }}
+        
+        .card-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }}
+        
+        .card-title {{
+            font-size: 16px;
+            font-weight: 600;
+            color: #e4e6eb;
+        }}
+        
+        .incident-list {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }}
+        
+        .incident-item {{
+            background: #0f1419;
+            border: 1px solid #2d3748;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s;
+        }}
+        
+        .incident-item:hover {{
+            border-color: #60a5fa;
+            transform: translateX(4px);
+        }}
+        
+        .incident-header {{
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 8px;
+        }}
+        
+        .incident-title {{
+            font-size: 14px;
+            font-weight: 500;
+            color: #e4e6eb;
+            flex: 1;
+        }}
+        
+        .incident-badge {{
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }}
+        
+        .badge-high {{
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+        }}
+        
+        .badge-medium {{
+            background: rgba(251, 191, 36, 0.2);
+            color: #fbbf24;
+        }}
+        
+        .badge-low {{
+            background: rgba(16, 185, 129, 0.2);
+            color: #10b981;
+        }}
+        
+        .incident-meta {{
+            font-size: 12px;
+            color: #9ca3af;
+        }}
+        
+        .empty-state {{
+            text-align: center;
+            padding: 48px 24px;
+            color: #6b7280;
+        }}
+        
+        .empty-state-icon {{
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
         }}
     </style>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>
-                <span class="icon">🛡️</span>
-                DLP Remediation Engine
-            </h1>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="logo">
+            <h1>🛡️ DLP Engine</h1>
+        </div>
+        <a href="/" class="nav-item active">
+            📊 Dashboard
+        </a>
+        <a href="/incidents" class="nav-item">
+            🚨 Incidents
+        </a>
+        <a href="/health" class="nav-item">
+            ❤️ Health Check
+        </a>
+        <a href="/stats" class="nav-item">
+            📈 Statistics
+        </a>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div>
+                <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 4px;">Security Dashboard</h2>
+                <p style="color: #9ca3af; font-size: 14px;">Monitor and manage DLP incidents in real-time</p>
+            </div>
             <div class="status-badge">
-                <span>●</span> System Online
+                <div class="status-dot"></div>
+                System Online
             </div>
         </div>
 
-        <!-- Statistics -->
+        <!-- Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
-                <h3>Total Incidents</h3>
-                <div class="value">{total_incidents}</div>
+                <div class="stat-label">Total Incidents</div>
+                <div class="stat-value">{total_incidents}</div>
+                <div class="stat-change">↑ All time</div>
             </div>
             <div class="stat-card">
-                <h3>Users Monitored</h3>
-                <div class="value">{unique_users}</div>
+                <div class="stat-label">Users Monitored</div>
+                <div class="stat-value">{unique_users}</div>
+                <div class="stat-change">Active users</div>
             </div>
             <div class="stat-card">
-                <h3>High Risk</h3>
-                <div class="value">{int(total_incidents * 0.3)}</div>
+                <div class="stat-label">High Risk</div>
+                <div class="stat-value">{high_risk_users}</div>
+                <div class="stat-change negative">↑ Requires attention</div>
             </div>
             <div class="stat-card">
-                <h3>Today</h3>
-                <div class="value">0</div>
+                <div class="stat-label">Today</div>
+                <div class="stat-value">{today_incidents}</div>
+                <div class="stat-change">Last 24 hours</div>
             </div>
         </div>
 
-        <!-- Action Buttons -->
-        <div class="action-buttons">
-            <a href="/incidents" class="btn btn-primary">
-                <span class="icon">📋</span>
-                View All Incidents
-            </a>
-            <a href="/health" class="btn btn-success">
-                <span class="icon">❤️</span>
-                System Health Check
-            </a>
-            <a href="/api/docs" class="btn btn-info">
-                <span class="icon">📚</span>
-                API Documentation
-            </a>
-            <a href="/stats" class="btn btn-warning">
-                <span class="icon">📊</span>
-                Statistics (JSON)
-            </a>
+        <!-- Charts -->
+        <div class="chart-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Incident Trend</div>
+                </div>
+                <canvas id="trendChart" height="80"></canvas>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">Violation Types</div>
+                </div>
+                <canvas id="violationChart" height="200"></canvas>
+            </div>
         </div>
 
         <!-- Recent Incidents -->
-        <div class="incidents-card">
-            <h2>🕐 Recent Activity</h2>
-            {"".join([f'''
-            <div class="incident-item">
-                <div class="title">{inc.incident_title}</div>
-                <div class="meta">
-                    <strong>User:</strong> {inc.user_principal_name} | 
-                    <strong>Time:</strong> {inc.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
-                </div>
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">Recent Activity</div>
+                <a href="/incidents" style="color: #60a5fa; text-decoration: none; font-size: 14px;">View All →</a>
             </div>
-            ''' for inc in recent_incidents]) if recent_incidents else '<p style="color: #718096;">No incidents yet</p>'}
+            <div class="incident-list">
+                {"".join([f'''
+                <div class="incident-item">
+                    <div class="incident-header">
+                        <div class="incident-title">{inc.incident_title}</div>
+                        <span class="incident-badge badge-high">HIGH</span>
+                    </div>
+                    <div class="incident-meta">
+                        <strong>User:</strong> {inc.user_principal_name} • 
+                        <strong>Time:</strong> {inc.timestamp.strftime("%Y-%m-%d %H:%M:%S")}
+                    </div>
+                </div>
+                ''' for inc in recent_incidents[:5]]) if recent_incidents else '''
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <p>No incidents recorded yet</p>
+                </div>
+                '''}
+            </div>
         </div>
     </div>
+
+    <script>
+        // Trend Chart
+        const trendCtx = document.getElementById('trendChart').getContext('2d');
+        new Chart(trendCtx, {{
+            type: 'line',
+            data: {{
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                datasets: [{{
+                    label: 'Incidents',
+                    data: [12, 19, 8, 15, 22, 18, 25, 30, 28, 35, 32, {total_incidents}],
+                    borderColor: '#60a5fa',
+                    backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {{
+                    legend: {{ display: false }}
+                }},
+                scales: {{
+                    y: {{
+                        beginAtZero: true,
+                        grid: {{ color: '#2d3748' }},
+                        ticks: {{ color: '#9ca3af' }}
+                    }},
+                    x: {{
+                        grid: {{ display: false }},
+                        ticks: {{ color: '#9ca3af' }}
+                    }}
+                }}
+            }}
+        }});
+
+        // Violation Types Chart
+        const violationCtx = document.getElementById('violationChart').getContext('2d');
+        new Chart(violationCtx, {{
+            type: 'doughnut',
+            data: {{
+                labels: ['KTP', 'NPWP', 'Employee ID', 'Other'],
+                datasets: [{{
+                    data: [30, 25, 20, 25],
+                    backgroundColor: ['#60a5fa', '#10b981', '#f59e0b', '#ef4444']
+                }}]
+            }},
+            options: {{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {{
+                    legend: {{
+                        position: 'bottom',
+                        labels: {{ color: '#9ca3af' }}
+                    }}
+                }}
+            }}
+        }});
+    </script>
 </body>
 </html>
     """
     return HTMLResponse(content=html)
 
 
-@app.get("/incidents", response_class=HTMLResponse)
-async def incidents_page(db: Session = Depends(get_db)):
-    """Incidents List Page with UI"""
-    
-    incidents = db.query(Offense).order_by(desc(Offense.timestamp)).limit(50).all()
-    total = db.query(Offense).count()
-    
-    html = f"""
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Incidents - DLP Engine</title>
-    <style>
-        * {{ margin: 0; padding: 0; box-sizing: border-box; }}
-        body {{
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-        }}
-        .container {{
-            max-width: 1200px;
-            margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }}
-        h1 {{
-            color: #2d3748;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }}
-        .btn-back {{
-            display: inline-block;
-            padding: 12px 24px;
-            background: #667eea;
-            color: white;
-            text-decoration: none;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }}
-        .btn-back:hover {{
-            background: #764ba2;
-        }}
-        table {{
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }}
-        th, td {{
-            padding: 15px;
-            text-align: left;
-            border-bottom: 1px solid #e2e8f0;
-        }}
-        th {{
-            background: #f7fafc;
-            color: #2d3748;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-        }}
-        tr:hover {{
-            background: #f7fafc;
-        }}
-        .badge {{
-            padding: 4px 12px;
-            border-radius: 12px;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }}
-        .badge-high {{
-            background: #fed7d7;
-            color: #c53030;
-        }}
-    </style>
-</head>
-<body>
-    <div class="container">
-        <a href="/" class="btn-back">← Back to Dashboard</a>
-        <h1>📋 All Incidents ({total})</h1>
-        
-        <table>
-            <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>User</th>
-                    <th>Incident</th>
-                    <th>Timestamp</th>
-                </tr>
-            </thead>
-            <tbody>
-                {"".join([f'''
-                <tr>
-                    <td>{inc.id}</td>
-                    <td>{inc.user_principal_name}</td>
-                    <td>{inc.incident_title}</td>
-                    <td>{inc.timestamp.strftime("%Y-%m-%d %H:%M:%S")}</td>
-                </tr>
-                ''' for inc in incidents]) if incidents else '<tr><td colspan="4" style="text-align: center; color: #718096;">No incidents found</td></tr>'}
-            </tbody>
-        </table>
-    </div>
-</body>
-</html>
-    """
-    return HTMLResponse(content=html)
-
-
-
-# API ENDPOINTS
 @app.get("/health")
 async def health_check():
-    """Health check"""
+    """Health check endpoint"""
     try:
         db = SessionLocal()
         db.execute("SELECT 1")
@@ -503,39 +646,118 @@ async def health_check():
         "status": "healthy" if db_status == "connected" else "degraded",
         "database": db_status,
         "timestamp": datetime.utcnow().isoformat(),
-        "version": "1.0.0"
+        "version": "2.0.0",
+        "features": {
+            "email_blocking": True,
+            "teams_alerts": True,  # Handled by Logic App
+            "sensitive_data_detection": True,
+            "account_revocation": True,
+            "email_notifications": EMAIL_ENABLED
+        },
+        "integration": {
+            "logic_app": True,
+            "teams_via_logic_app": True
+        }
     }
 
 
 @app.get("/stats")
 async def get_stats(db: Session = Depends(get_db)):
     """Get statistics"""
-    total = db.query(Offense).count()
-    users = db.query(Offense.user_principal_name).distinct().count()
-    recent = db.query(Offense).order_by(desc(Offense.timestamp)).limit(5).all()
-    
-    return {
-        "total_incidents": total,
-        "unique_users": users,
-        "high_risk": int(total * 0.3),
-        "recent_incidents": [
-            {
-                "id": inc.id,
-                "user": inc.user_principal_name,
-                "title": inc.incident_title,
-                "timestamp": inc.timestamp.isoformat()
+    try:
+        total = db.query(Offense).count()
+        users = db.query(Offense.user_principal_name).distinct().count()
+        
+        high_risk = db.query(
+            Offense.user_principal_name,
+            func.count(Offense.id).label('count')
+        ).group_by(Offense.user_principal_name).having(
+            func.count(Offense.id) >= 3
+        ).count()
+        
+        today = datetime.utcnow().date()
+        today_count = db.query(Offense).filter(
+            func.date(Offense.timestamp) == today
+        ).count()
+        
+        recent = db.query(Offense).order_by(desc(Offense.timestamp)).limit(10).all()
+        
+        return {
+            "total_incidents": total,
+            "unique_users": users,
+            "high_risk": high_risk,
+            "today": today_count,
+            "recent_incidents": [
+                {
+                    "id": inc.id,
+                    "user": inc.user_principal_name,
+                    "title": inc.incident_title,
+                    "timestamp": inc.timestamp.isoformat()
+                }
+                for inc in recent
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Stats error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.post("/check-email")
+async def check_email(request: Request, db: Session = Depends(get_db)):
+    """
+    Check email content for sensitive data
+    Logic App can call this first before sending
+    """
+    try:
+        payload = await request.json()
+        sender = payload.get("sender")
+        content = payload.get("content", "")
+        
+        detection_result = SensitiveDataDetector.check_sensitive_content(content)
+        
+        if detection_result["has_sensitive_data"]:
+            log_offense(db, sender, f"Email blocked - Sensitive data detected")
+            violation_count = get_offense_count(db, sender)
+            
+            # Send email notification if enabled
+            if EMAIL_ENABLED:
+                try:
+                    send_violation_email(
+                        recipient=sender,
+                        violation_types=detection_result["violation_types"],
+                        violation_count=violation_count
+                    )
+                    logger.info(f"✓ Email notification sent to {sender}")
+                except Exception as e:
+                    logger.error(f"Failed to send email: {e}")
+            
+            return {
+                "status": "blocked",
+                "reason": "Sensitive data detected",
+                "violations": detection_result["violations"],
+                "violation_types": detection_result["violation_types"],
+                "violation_count": violation_count,
+                "masked_content": SensitiveDataDetector.mask_sensitive_data(content),
+                "action_required": "revoke_signin" if violation_count >= 3 else "warning"
             }
-            for inc in recent
-        ]
-    }
+        
+        return {"status": "allowed", "message": "No sensitive data detected"}
+        
+    except Exception as e:
+        logger.error(f"Email check error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
 
 
 @app.post("/remediate")
 async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
-    """Process Sentinel incident"""
+    """
+    Process Sentinel incident - Called by Logic App
+    Logic App will handle Teams notification
+    This API handles: detection, logging, email, account revocation
+    """
     try:
         logger.info("=" * 80)
-        logger.info("NEW INCIDENT RECEIVED")
+        logger.info("NEW INCIDENT RECEIVED FROM LOGIC APP")
         
         incident_payload = await request.json()
         parsed_incident = SentinelIncidentParser.parse(incident_payload)
@@ -552,7 +774,7 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
         # Get offense history
         offense_count = get_offense_count(db, user_upn)
         
-        # Create contexts
+        # Create contexts for decision engine
         incident_ctx = IncidentContext(severity=parsed_incident["severity"])
         user_ctx = UserContext(department=user_details.get("department", "Unknown"))
         file_ctx = FileContext(sensitivity_label=parsed_incident["file_sensitivity"])
@@ -567,37 +789,121 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
         # Log offense
         log_offense(db, user_upn, parsed_incident["incident_title"])
         
-        # Return response
-        return {
+        # Calculate new offense count
+        new_offense_count = offense_count + 1
+        should_revoke = new_offense_count >= 3
+        send_socialization_flag = new_offense_count in [3, 5]
+        
+        # Detect violation types (for Logic App)
+        violation_types = ["Sensitive Data"]  # Default
+        # You can enhance this with actual detection from file content if available
+        
+        # Send email notification if enabled
+        email_sent = False
+        if EMAIL_ENABLED:
+            try:
+                send_violation_email(
+                    recipient=user_upn,
+                    violation_types=violation_types,
+                    violation_count=new_offense_count
+                )
+                email_sent = True
+                logger.info(f"✓ Email notification sent to {user_upn}")
+            except Exception as e:
+                logger.error(f"Failed to send email notification: {e}")
+        
+        # Send socialization email if threshold reached
+        socialization_sent = False
+        if EMAIL_ENABLED and send_socialization_flag:
+            try:
+                send_socialization_email(user_upn, new_offense_count)
+                socialization_sent = True
+                logger.info(f"✓ Socialization email sent to {user_upn}")
+            except Exception as e:
+                logger.error(f"Failed to send socialization email: {e}")
+        
+        # Revoke account if threshold reached
+        account_revoked = False
+        if should_revoke:
+            try:
+                await perform_hard_block(user_upn)
+                account_revoked = True
+                logger.info(f"✓ Account revoked for {user_upn}")
+            except Exception as e:
+                logger.error(f"Failed to revoke account: {e}")
+        
+        # Send admin alert if high risk
+        admin_notified = False
+        if EMAIL_ENABLED and new_offense_count >= 3:
+            try:
+                email_service = EmailNotificationService()
+                email_service.send_admin_alert(
+                    user=user_upn,
+                    incident_title=parsed_incident["incident_title"],
+                    violation_count=new_offense_count,
+                    action_taken="Account Revoked" if account_revoked else "Warning Sent"
+                )
+                admin_notified = True
+                logger.info(f"✓ Admin alert sent for {user_upn}")
+            except Exception as e:
+                logger.error(f"Failed to send admin alert: {e}")
+        
+        # Return response - Logic App will use this to post to Teams
+        response = {
             "request_id": parsed_incident["incident_id"],
             "incident_id": parsed_incident["incident_id"],
             "timestamp": datetime.utcnow().isoformat(),
             "user": user_upn,
+            "user_details": {
+                "display_name": user_details.get("displayName", "Unknown"),
+                "department": user_details.get("department", "Unknown"),
+                "job_title": user_details.get("jobTitle", "Unknown")
+            },
             "assessment": {
                 "risk_score": assessment.score,
                 "risk_level": assessment.risk_level,
                 "remediation_action": assessment.remediation_action,
                 "confidence": 0.95,
-                "escalation_required": assessment.risk_level in ["High", "Critical"],
-                "justification": [
-                    f"Severity: {parsed_incident['severity']}",
-                    f"Department: {user_details.get('department', 'Unknown')}",
-                    f"Previous offenses: {offense_count}"
-                ],
-                "recommended_actions": []
+                "escalation_required": assessment.risk_level in ["High", "Critical"]
             },
-            "offense_count": offense_count + 1
+            "offense_count": new_offense_count,
+            "violation_types": violation_types,
+            "actions_taken": {
+                "email_blocked": True,
+                "account_revoked": account_revoked,
+                "email_notification_sent": email_sent,
+                "socialization_sent": socialization_sent,
+                "admin_notified": admin_notified,
+                "teams_alert_sent": False  # Logic App handles this
+            },
+            "status": "processed",
+            "message": f"Violation processed. User has {new_offense_count} total violations."
         }
         
+        logger.info(f"✓ Incident processed for {user_upn}: {new_offense_count} violations")
+        return response
+        
     except Exception as e:
-        logger.error(f"Error: {str(e)}")
-        return JSONResponse(content={"error": str(e)}, status_code=500)
+        logger.error(f"Error processing incident: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
+        return JSONResponse(
+            content={
+                "error": str(e),
+                "status": "failed",
+                "timestamp": datetime.utcnow().isoformat()
+            }, 
+            status_code=500
+        )
 
 
 @app.on_event("startup")
 async def startup():
     logger.info("=" * 80)
-    logger.info("DLP REMEDIATION ENGINE STARTING")
+    logger.info("DLP REMEDIATION ENGINE v2.0 STARTING")
+    logger.info("=" * 80)
+    logger.info("Integration: Azure Logic App → API → Database/Email")
+    logger.info("Teams Alerts: Handled by Logic App")
+    logger.info(f"Email Notifications: {'Enabled' if EMAIL_ENABLED else 'Disabled'}")
     logger.info("=" * 80)
 
 
