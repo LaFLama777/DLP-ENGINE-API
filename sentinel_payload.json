@@ -4,7 +4,7 @@
   "etag": "\"5500eff2-0000-0100-0000-68d3ffbf0000\"",
   "type": "Microsoft.SecurityInsights/Incidents",
   "properties": {
-    "title": "DLP policy (Custom policy Automation) matched for document (Test Document.docx) in OneDrive involving one user",
+    "title": "DLP policy (Custom policy Automation) matched for document (Test kedua Document.docx) in OneDrive involving one user",
     "severity": "High",
     "status": "New",
     "owner": {
@@ -95,7 +95,7 @@
           "aadUserId": "39162ce8-d082-4a70-ae30-db42b04c524c",
           "isDomainJoined": true,
           "additionalData": {
-            "UserPrincipalName": "adminiwp@vxqrf.onmicrosoft.com",
+            "UserPrincipalName": "adminiwp2@vxqrf.onmicrosoft.com",
             "AccountName": "adminiwp"
           },
           "friendlyName": "Admin IWP"
