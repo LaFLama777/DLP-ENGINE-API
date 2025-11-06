@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
+from typing import Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -129,23 +130,58 @@ class SentinelIncidentParser:
     @staticmethod
     def parse(incident_payload: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            properties = incident_payload.get("properties", {})
+            # Handle Logic App wrapper structure
+            # Logic App sends the payload wrapped in "object" key
+            actual_incident = incident_payload
+            
+            # Check if payload is wrapped (from Logic App)
+            if "object" in incident_payload and "properties" not in incident_payload:
+                logger.info("Detected Logic App wrapper - extracting incident object")
+                actual_incident = incident_payload["object"]
+            
+            # Extract properties and related entities
+            properties = actual_incident.get("properties", {})
             related_entities = properties.get("relatedEntities", [])
             
+            logger.info(f"Processing incident with {len(related_entities)} related entities")
+            
+            # Extract user UPN
             user_upn = None
             for entity in related_entities:
                 if entity.get("kind") == "Account":
-                    user_upn = entity.get("properties", {}).get("additionalData", {}).get("UserPrincipalName")
-                    break
+                    entity_props = entity.get("properties", {})
+                    additional_data = entity_props.get("additionalData", {})
+                    
+                    # Try to get UserPrincipalName from additionalData
+                    user_upn = additional_data.get("UserPrincipalName")
+                    
+                    # Fallback: construct from accountName and upnSuffix if not found
+                    if not user_upn:
+                        account_name = additional_data.get("AccountName") or entity_props.get("accountName")
+                        upn_suffix = entity_props.get("upnSuffix")
+                        if account_name and upn_suffix:
+                            user_upn = f"{account_name}@{upn_suffix}"
+                            logger.info(f"Constructed UPN from components: {user_upn}")
+                    
+                    if user_upn:
+                        logger.info(f"Found user UPN: {user_upn}")
+                        break
             
+            # Extract file name
             file_name = None
             for entity in related_entities:
                 if entity.get("kind") == "File":
                     file_name = entity.get("properties", {}).get("fileName", "").replace("%20", " ")
+                    if file_name:
+                        logger.info(f"Found file name: {file_name}")
                     break
             
+            # Log warning if user UPN not found
+            if not user_upn:
+                logger.warning("User UPN not found in incident payload!")
+            
             return {
-                "incident_id": incident_payload.get("name", ""),
+                "incident_id": actual_incident.get("name", ""),
                 "user_upn": user_upn,
                 "incident_title": properties.get("title", ""),
                 "severity": properties.get("severity", "Medium"),
@@ -155,6 +191,7 @@ class SentinelIncidentParser:
             }
         except Exception as e:
             logger.error(f"Error parsing incident: {e}")
+            logger.error(f"Payload structure: {list(incident_payload.keys())}")
             raise
 
 try:
