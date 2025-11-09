@@ -12,7 +12,6 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
-from typing import Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -131,7 +130,6 @@ class SentinelIncidentParser:
     def parse(incident_payload: Dict[str, Any]) -> Dict[str, Any]:
         try:
             # Handle Logic App wrapper structure
-            # Logic App sends the payload wrapped in "object" key
             actual_incident = incident_payload
             
             # Check if payload is wrapped (from Logic App)
@@ -216,7 +214,7 @@ async def health_check():
     """Health check endpoint - JSON response"""
     try:
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         db.close()
         db_status = "connected"
     except Exception as e:
@@ -240,10 +238,7 @@ async def health_check():
 
 @app.post("/check-email")
 async def check_email(request: Request, db: Session = Depends(get_db)):
-    """
-    Check email content for sensitive data
-    Logic App can call this first before sending
-    """
+    """Check email content for sensitive data"""
     try:
         payload = await request.json()
         sender = payload.get("sender")
@@ -286,11 +281,7 @@ async def check_email(request: Request, db: Session = Depends(get_db)):
 
 @app.post("/remediate")
 async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
-    """
-    Process Sentinel incident - Called by Logic App
-    Logic App will handle Teams notification
-    This API handles: detection, logging, email, account revocation
-    """
+    """Process Sentinel incident - Called by Logic App"""
     try:
         logger.info("=" * 80)
         logger.info("NEW INCIDENT RECEIVED FROM LOGIC APP")
@@ -330,22 +321,33 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
         should_revoke = new_offense_count >= 3
         send_socialization_flag = new_offense_count in [3, 5]
         
-        # Detect violation types (for Logic App)
-        violation_types = ["Sensitive Data"]  # Default
+        # Detect violation types
+        violation_types = ["Sensitive Data"]
         
         # Send email notification if enabled
         email_sent = False
         if EMAIL_ENABLED:
             try:
-                send_violation_email(
+                logger.info(f"📧 EMAIL_ENABLED=True, attempting to send notification to {user_upn}")
+                violation_types_list = violation_types if isinstance(violation_types, list) else [violation_types]
+                
+                result = send_violation_email(
                     recipient=user_upn,
-                    violation_types=violation_types,
+                    violation_types=violation_types_list,
                     violation_count=new_offense_count
                 )
-                email_sent = True
-                logger.info(f"✓ Email notification sent to {user_upn}")
+                
+                if result:
+                    email_sent = True
+                    logger.info(f"✅ Email notification sent to {user_upn}")
+                else:
+                    logger.error(f"❌ Email notification failed for {user_upn}")
+                    
             except Exception as e:
-                logger.error(f"Failed to send email notification: {e}")
+                logger.error(f"❌ Failed to send email notification: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        else:
+            logger.warning("⚠️ EMAIL_ENABLED=False, skipping email notification")
         
         # Send socialization email if threshold reached
         socialization_sent = False
@@ -360,12 +362,19 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
         # Revoke account if threshold reached
         account_revoked = False
         if should_revoke:
+            logger.info(f"🚨 CRITICAL: User has {new_offense_count} violations - triggering account revocation")
             try:
-                await perform_hard_block(user_upn)
-                account_revoked = True
-                logger.info(f"✓ Account revoked for {user_upn}")
+                revoke_result = await perform_hard_block(user_upn)
+                if revoke_result:
+                    account_revoked = True
+                    logger.info(f"✅ Account successfully revoked for {user_upn}")
+                else:
+                    logger.error(f"❌ Account revocation returned False for {user_upn}")
             except Exception as e:
-                logger.error(f"Failed to revoke account: {e}")
+                logger.error(f"❌ Failed to revoke account for {user_upn}: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+        else:
+            logger.info(f"ℹ️ User has {new_offense_count} violations (threshold: 3) - no revocation needed yet")
         
         # Send admin alert if high risk
         admin_notified = False
@@ -383,7 +392,7 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
             except Exception as e:
                 logger.error(f"Failed to send admin alert: {e}")
         
-        # Return response - Logic App will use this to post to Teams
+        # Return response
         response = {
             "request_id": parsed_incident["incident_id"],
             "incident_id": parsed_incident["incident_id"],
@@ -409,7 +418,7 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
                 "email_notification_sent": email_sent,
                 "socialization_sent": socialization_sent,
                 "admin_notified": admin_notified,
-                "teams_alert_sent": False  # Logic App handles this
+                "teams_alert_sent": False
             },
             "status": "processed",
             "message": f"Violation processed. User has {new_offense_count} total violations."

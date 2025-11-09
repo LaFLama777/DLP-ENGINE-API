@@ -5,6 +5,7 @@ from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 from typing import List
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
@@ -22,30 +23,46 @@ class EmailNotificationService:
         if not all([self.sender_email, self.sender_password]):
             logger.warning("Email credentials not configured")
     
+    @staticmethod
+    def mask_sensitive_data(text: str) -> str:
+        """Mask sensitive data in text for display"""
+        if not text:
+            return ""
+        
+        # Mask KTP (16 digits) - show first 3 and last 3
+        text = re.sub(r'\b(\d{3})\d{10}(\d{3})\b', r'\1***********\2', text)
+        
+        # Mask NPWP - show first 2 and last 2
+        text = re.sub(r'(npwp[:\s-]*)(\d{2})\d{11}(\d{2})', r'\1\2***********\3', text, flags=re.IGNORECASE)
+        
+        # Mask Employee ID
+        text = re.sub(r'\b(EMP|KARY|NIP)([-\s]?)(\d)\d{3}(\d)\b', r'\1\2\3***\4', text, flags=re.IGNORECASE)
+        
+        return text
+    
     def send_violation_notification(self, 
                                     recipient: str,
-                                    violation_type: str,
+                                    violation_types: List[str],
                                     violation_count: int,
                                     blocked_content_summary: str = None) -> bool:
-        """
-        Send email to user notifying them their email was blocked
+        """Send email notification for DLP violation"""
         
-        Args:
-            recipient: User email address
-            violation_type: Type of violation (KTP, NPWP, etc.)
-            violation_count: Number of violations
-            blocked_content_summary: Brief summary of blocked content
-            
-        Returns:
-            bool: True if sent successfully
-        """
         if not self.sender_email or not self.sender_password:
-            logger.error("Email credentials not configured")
+            logger.error("❌ Email credentials not configured!")
+            logger.error(f"   SENDER_EMAIL: {'Set' if self.sender_email else 'NOT SET'}")
+            logger.error(f"   SENDER_PASSWORD: {'Set' if self.sender_password else 'NOT SET'}")
             return False
+        
+        logger.info(f"📧 Attempting to send email to {recipient}")
+        logger.info(f"   From: {self.sender_email}")
+        logger.info(f"   SMTP: {self.smtp_server}:{self.smtp_port}")
+        
+        # Convert list to string if needed
+        violation_type_str = ", ".join(violation_types) if isinstance(violation_types, list) else violation_types
         
         subject = "⚠️ Email Delivery Failed - DLP Policy Violation"
         
-        # Create HTML email
+        # Create HTML email with redacted content
         html_content = f"""
         <!DOCTYPE html>
         <html>
@@ -90,6 +107,13 @@ class EmailNotificationService:
                     padding: 15px;
                     margin: 20px 0;
                 }}
+                .redacted-box {{
+                    background: #fff3cd;
+                    border-left: 4px solid #ffc107;
+                    padding: 15px;
+                    margin: 20px 0;
+                    font-family: monospace;
+                }}
                 .info-item {{
                     display: flex;
                     padding: 8px 0;
@@ -113,15 +137,6 @@ class EmailNotificationService:
                     font-size: 12px;
                     color: #6c757d;
                 }}
-                .btn {{
-                    display: inline-block;
-                    padding: 12px 24px;
-                    background: #007bff;
-                    color: white;
-                    text-decoration: none;
-                    border-radius: 4px;
-                    margin: 10px 0;
-                }}
             </style>
         </head>
         <body>
@@ -141,7 +156,7 @@ class EmailNotificationService:
                     <div class="info-box">
                         <div class="info-item">
                             <div class="info-label">Violation Type:</div>
-                            <div class="info-value">{violation_type}</div>
+                            <div class="info-value">{violation_type_str}</div>
                         </div>
                         <div class="info-item">
                             <div class="info-label">Violation Count:</div>
@@ -152,6 +167,18 @@ class EmailNotificationService:
                             <div class="info-value">{datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}</div>
                         </div>
                     </div>
+                    
+                    {f'''
+                    <h3>🔍 Detected Content (Redacted):</h3>
+                    <div class="redacted-box">
+                        <p style="color: #856404;">
+                            {self.mask_sensitive_data(blocked_content_summary)}
+                        </p>
+                        <p style="font-size: 12px; color: #856404; margin-top: 10px;">
+                            ⚠️ Actual sensitive data has been redacted for security
+                        </p>
+                    </div>
+                    ''' if blocked_content_summary else ''}
                     
                     <h3>🔒 What was detected:</h3>
                     <p>The system detected the following types of sensitive data:</p>
@@ -191,31 +218,41 @@ class EmailNotificationService:
             
             msg.attach(MIMEText(html_content, 'html'))
             
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            logger.info(f"📧 Connecting to SMTP server: {self.smtp_server}:{self.smtp_port}")
+            
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30) as server:
+                server.set_debuglevel(1)  # Enable debug output
+                logger.info("📧 Starting TLS...")
                 server.starttls()
+                
+                logger.info("📧 Logging in...")
                 server.login(self.sender_email, self.sender_password)
+                
+                logger.info("📧 Sending message...")
                 server.send_message(msg)
             
-            logger.info(f"Violation notification sent to {recipient}")
+            logger.info(f"✅ Email successfully sent to {recipient}")
             return True
             
+        except smtplib.SMTPAuthenticationError as e:
+            logger.error(f"❌ SMTP Authentication failed: {e}")
+            logger.error("   Check SENDER_EMAIL and SENDER_PASSWORD in Azure App Service Configuration")
+            return False
+        except smtplib.SMTPException as e:
+            logger.error(f"❌ SMTP error: {e}")
+            return False
         except Exception as e:
-            logger.error(f"Failed to send email to {recipient}: {e}")
+            logger.error(f"❌ Failed to send email: {e}")
+            logger.error(f"   Error type: {type(e).__name__}")
+            import traceback
+            logger.error(f"   Traceback: {traceback.format_exc()}")
             return False
     
     def send_socialization_invitation(self, 
                                      recipient: str,
                                      violation_count: int) -> bool:
-        """
-        Send socialization/training invitation after multiple violations
+        """Send socialization/training invitation after multiple violations"""
         
-        Args:
-            recipient: User email address
-            violation_count: Number of violations
-            
-        Returns:
-            bool: True if sent successfully
-        """
         if not self.sender_email or not self.sender_password:
             logger.error("Email credentials not configured")
             return False
@@ -329,37 +366,31 @@ class EmailNotificationService:
             
             msg.attach(MIMEText(html_content, 'html'))
             
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30) as server:
                 server.starttls()
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
             
-            logger.info(f"Socialization invitation sent to {recipient}")
+            logger.info(f"✅ Socialization invitation sent to {recipient}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to send socialization email to {recipient}: {e}")
+            logger.error(f"❌ Failed to send socialization email to {recipient}: {e}")
             return False
     
     def send_admin_alert(self, 
                         user: str,
-                        violation_type: str,
+                        incident_title: str,
                         violation_count: int,
                         action_taken: str) -> bool:
-        """
-        Send alert to admin about high-risk user activity
+        """Send alert to admin about high-risk user activity"""
         
-        Args:
-            user: User who triggered the violation
-            violation_type: Type of violation
-            violation_count: Total violation count
-            action_taken: Action taken by the system
-            
-        Returns:
-            bool: True if sent successfully
-        """
         if not self.admin_email:
             logger.warning("Admin email not configured")
+            return False
+        
+        if not self.sender_email or not self.sender_password:
+            logger.error("Email credentials not configured")
             return False
         
         subject = f"🚨 DLP Alert: High-Risk Activity - {user}"
@@ -370,14 +401,14 @@ class EmailNotificationService:
         <body style="font-family: Arial, sans-serif;">
             <h2 style="color: #dc3545;">🚨 DLP Security Alert</h2>
             <p><strong>User:</strong> {user}</p>
-            <p><strong>Violation Type:</strong> {violation_type}</p>
+            <p><strong>Incident:</strong> {incident_title}</p>
             <p><strong>Total Violations:</strong> {violation_count}</p>
             <p><strong>Action Taken:</strong> {action_taken}</p>
             <p><strong>Timestamp:</strong> {datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")}</p>
             
             {"<p style='color: red; font-weight: bold;'>⚠️ CRITICAL: User account has been locked due to repeated violations.</p>" if violation_count >= 3 else ""}
             
-            <p>Please review this incident in the DLP dashboard.</p>
+            <p>Please review this incident in the DLP dashboard: <a href='https://dlp-engine-a9g7hjfvczfjmdn.eastus-01.azurewebsites.net/'>View Dashboard</a></p>
         </body>
         </html>
         """
@@ -390,24 +421,24 @@ class EmailNotificationService:
             
             msg.attach(MIMEText(html_content, 'html'))
             
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+            with smtplib.SMTP(self.smtp_server, self.smtp_port, timeout=30) as server:
                 server.starttls()
                 server.login(self.sender_email, self.sender_password)
                 server.send_message(msg)
             
-            logger.info(f"Admin alert sent for user {user}")
+            logger.info(f"✅ Admin alert sent for user {user}")
             return True
             
         except Exception as e:
-            logger.error(f"Failed to send admin alert: {e}")
+            logger.error(f"❌ Failed to send admin alert: {e}")
             return False
 
 
 # Utility functions
-def send_violation_email(recipient: str, violation_type: str, violation_count: int) -> bool:
+def send_violation_email(recipient: str, violation_types: List[str], violation_count: int, blocked_content: str = None) -> bool:
     """Quick function to send violation notification"""
     service = EmailNotificationService()
-    return service.send_violation_notification(recipient, violation_type, violation_count)
+    return service.send_violation_notification(recipient, violation_types, violation_count, blocked_content)
 
 
 def send_socialization_email(recipient: str, violation_count: int) -> bool:
