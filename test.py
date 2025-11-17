@@ -47,7 +47,7 @@ def check_imports():
     sys.path.insert(0, os.getcwd())
     
     try:
-        import app.email_notifications as email_notifications
+        import email_notifications as email_notifications
         print("✓ email_notifications.py can be imported")
         
         # Check for required classes/functions

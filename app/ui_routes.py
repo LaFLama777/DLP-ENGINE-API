@@ -716,7 +716,7 @@ async def health_check_page():
         db_color = "#ef4444"
     
     try:
-        from app.email_notifications import GraphEmailNotificationService
+        from email_notifications import GraphEmailNotificationService
         email_enabled = True
     except:
         email_enabled = False

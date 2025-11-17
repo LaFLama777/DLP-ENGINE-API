@@ -1,6 +1,7 @@
 #python -m uvicorn app.main:app --reload
 import os
 import sys
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import re
 import traceback
 from datetime import datetime, timedelta
@@ -12,9 +13,9 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
-from app.email_notifications import send_violation_email, send_socialization_email, GraphEmailNotificationService
+from email_notifications import send_violation_email, send_socialization_email, GraphEmailNotificationService
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 
 from database import (
     create_db_and_tables, 
@@ -193,13 +194,25 @@ class SentinelIncidentParser:
             logger.error(f"Payload structure: {list(incident_payload.keys())}")
             raise
 
+EMAIL_ENABLED = False
+email_service = None
+
 try:
-    from app.email_notifications import send_violation_email, send_socialization_email, EmailNotificationService
+    from email_notifications import (
+        send_violation_email, 
+        send_socialization_email, 
+        GraphEmailNotificationService
+    )
     EMAIL_ENABLED = True
+    email_service = GraphEmailNotificationService()
     logger.info("✓ Email notifications enabled")
-except ImportError:
+    logger.info(f"✓ Email sender configured: {os.getenv('SENDER_EMAIL', 'NOT SET')}")
+except ImportError as e:
     EMAIL_ENABLED = False
-    logger.warning("⚠️ Email notifications disabled (email_notifications.py not found)")
+    logger.warning(f"⚠️ Email notifications disabled - Import error: {e}")
+except Exception as e:
+    EMAIL_ENABLED = False
+    logger.error(f"⚠️ Email notifications disabled - Configuration error: {e}")
 
 # Import UI routes
 try:
