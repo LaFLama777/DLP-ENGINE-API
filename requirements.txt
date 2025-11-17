@@ -8,7 +8,7 @@ python-dotenv==1.0.1
 SQLAlchemy==2.0.25
 psycopg2-binary==2.9.9
 
-# Azure & Microsoft Graph
+# Azure & Microsoft Graph API
 azure-core==1.30.0
 azure-identity==1.15.0
 msgraph-core==1.0.0
