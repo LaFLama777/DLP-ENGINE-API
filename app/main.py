@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
+from app.email_notifications import send_violation_email, send_socialization_email, GraphEmailNotificationService
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -193,7 +194,7 @@ class SentinelIncidentParser:
             raise
 
 try:
-    from email_notifications import send_violation_email, send_socialization_email, EmailNotificationService
+    from app.email_notifications import send_violation_email, send_socialization_email, EmailNotificationService
     EMAIL_ENABLED = True
     logger.info("✓ Email notifications enabled")
 except ImportError:
