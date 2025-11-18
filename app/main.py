@@ -12,6 +12,10 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
+from fastapi import Header
+from typing import Optional
+import hashlib
+import hmac
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -462,6 +466,258 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
             }, 
             status_code=500
         )
+@app.get("/webhook/test")
+async def test_webhook():
+    """Test endpoint - verify webhook is accessible"""
+    return {
+        "status": "online",
+        "service": "DLP Remediation Engine",
+        "version": "2.0.0",
+        "endpoints": {
+            "eventgrid": "/webhook/eventgrid",
+            "purview": "/webhook/purview",
+            "test": "/webhook/test"
+        },
+        "timestamp": datetime.utcnow().isoformat(),
+        "message": "Webhook service is ready"
+    }
+
+
+@app.post("/webhook/purview")
+async def purview_webhook(request: Request, db: Session = Depends(get_db)):
+    """
+    Microsoft Purview DLP Webhook
+    Receives alerts directly from Purview DLP policies
+    """
+    try:
+        payload = await request.json()
+        logger.info("=" * 80)
+        logger.info("📨 PURVIEW WEBHOOK RECEIVED")
+        logger.info(f"Payload keys: {list(payload.keys())}")
+        
+        # Log full payload for debugging
+        logger.info(f"Full payload: {payload}")
+        
+        # Purview DLP payload structure
+        alert_data = payload.get("AlertData", {})
+        
+        # Extract user and incident info
+        user_upn = alert_data.get("User") or payload.get("User")
+        incident_title = alert_data.get("Title") or payload.get("Title", "DLP Policy Violation")
+        severity = alert_data.get("Severity", "High")
+        file_name = alert_data.get("FileName") or payload.get("FileName")
+        
+        logger.info(f"User: {user_upn}")
+        logger.info(f"Incident: {incident_title}")
+        
+        if not user_upn:
+            logger.error("❌ User UPN not found in Purview payload")
+            return {"status": "error", "message": "User UPN required"}
+        
+        # Get user details
+        user_details = await get_user_details(user_upn)
+        if not user_details:
+            user_details = {"displayName": "Unknown", "department": "Unknown", "jobTitle": "Unknown"}
+        
+        # Get offense history
+        offense_count = get_offense_count(db, user_upn)
+        
+        # Create contexts for decision engine
+        incident_ctx = IncidentContext(severity=severity)
+        user_ctx = UserContext(department=user_details.get("department", "Unknown"))
+        file_ctx = FileContext(sensitivity_label="Confidential")
+        offense_hist = OffenseHistory(previous_offenses=offense_count)
+        
+        # Assess risk
+        assessment = decision_engine.assess_risk(incident_ctx, user_ctx, file_ctx, offense_hist)
+        
+        # Log offense
+        log_offense(db, user_upn, incident_title)
+        new_offense_count = offense_count + 1
+        
+        # Determine actions
+        should_revoke = new_offense_count >= 3
+        violation_types = ["Sensitive Data", "DLP Policy Violation"]
+        
+        # Send email notification
+        email_sent = False
+        if EMAIL_ENABLED and GraphEmailNotificationService:
+            try:
+                logger.info(f"📧 Sending email to {user_upn}")
+                email_service = GraphEmailNotificationService()
+                result = await email_service.send_violation_notification(
+                    recipient=user_upn,
+                    violation_types=violation_types,
+                    violation_count=new_offense_count,
+                    blocked_content_summary=incident_title,
+                    incident_title=incident_title,
+                    file_name=file_name
+                )
+                email_sent = result
+                logger.info(f"✅ Email sent: {email_sent}")
+            except Exception as e:
+                logger.error(f"❌ Email failed: {e}")
+        
+        # Revoke account if threshold reached
+        account_revoked = False
+        if should_revoke:
+            try:
+                logger.info(f"🚨 Revoking account for {user_upn}")
+                revoke_result = await perform_hard_block(user_upn)
+                account_revoked = revoke_result
+                logger.info(f"✅ Account revoked: {account_revoked}")
+            except Exception as e:
+                logger.error(f"❌ Revocation failed: {e}")
+        
+        # Send admin alert
+        admin_notified = False
+        if EMAIL_ENABLED and new_offense_count >= 3 and GraphEmailNotificationService:
+            try:
+                email_service = GraphEmailNotificationService()
+                await email_service.send_admin_alert(
+                    user=user_upn,
+                    incident_title=incident_title,
+                    violation_count=new_offense_count,
+                    action_taken="Account Revoked" if account_revoked else "Warning Sent",
+                    violation_types=violation_types,
+                    file_name=file_name
+                )
+                admin_notified = True
+            except Exception as e:
+                logger.error(f"Admin alert failed: {e}")
+        
+        response = {
+            "status": "success",
+            "incident_id": payload.get("CorrelationId", "unknown"),
+            "user": user_upn,
+            "offense_count": new_offense_count,
+            "risk_score": assessment.score if assessment else 0,
+            "risk_level": assessment.risk_level if assessment else "Unknown",
+            "actions": {
+                "email_sent": email_sent,
+                "account_revoked": account_revoked,
+                "admin_notified": admin_notified
+            },
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+        logger.info(f"✅ Purview webhook processed: {response}")
+        logger.info("=" * 80)
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"❌ Purview webhook error: {e}")
+        logger.error(traceback.format_exc())
+        return JSONResponse(
+            content={"error": str(e), "timestamp": datetime.utcnow().isoformat()},
+            status_code=500
+        )
+
+
+@app.post("/webhook/eventgrid")
+async def event_grid_webhook(
+    request: Request,
+    aeg_event_type: Optional[str] = Header(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Azure Event Grid webhook
+    Receives events from Sentinel via Event Grid
+    """
+    try:
+        payload = await request.json()
+        logger.info(f"📨 Event Grid webhook: {aeg_event_type}")
+        
+        # Handle subscription validation
+        if aeg_event_type == "SubscriptionValidation":
+            validation_code = payload[0]["data"]["validationCode"]
+            logger.info(f"✅ Validation code: {validation_code}")
+            return {"validationResponse": validation_code}
+        
+        # Process events
+        results = []
+        for event in payload:
+            try:
+                event_type = event.get("eventType", "")
+                
+                if "SecurityInsights" in event_type or "Incident" in event_type:
+                    incident_data = event.get("data", {})
+                    
+                    # Parse and process (same as /remediate)
+                    parsed_incident = SentinelIncidentParser.parse(incident_data)
+                    user_upn = parsed_incident["user_upn"]
+                    
+                    if not user_upn:
+                        continue
+                    
+                    # Get offense count
+                    offense_count = get_offense_count(db, user_upn)
+                    
+                    # Log offense
+                    log_offense(db, user_upn, parsed_incident["incident_title"])
+                    new_offense_count = offense_count + 1
+                    
+                    # Send notification
+                    email_sent = False
+                    if EMAIL_ENABLED and GraphEmailNotificationService:
+                        try:
+                            email_service = GraphEmailNotificationService()
+                            result = await email_service.send_violation_notification(
+                                recipient=user_upn,
+                                violation_types=["Sensitive Data"],
+                                violation_count=new_offense_count,
+                                incident_title=parsed_incident["incident_title"],
+                                file_name=parsed_incident.get("file_name")
+                            )
+                            email_sent = result
+                        except Exception as e:
+                            logger.error(f"Email failed: {e}")
+                    
+                    results.append({
+                        "incident_id": parsed_incident["incident_id"],
+                        "user": user_upn,
+                        "offense_count": new_offense_count,
+                        "email_sent": email_sent
+                    })
+            
+            except Exception as e:
+                logger.error(f"Event processing error: {e}")
+                results.append({"error": str(e)})
+        
+        return {"status": "success", "processed": len(results), "results": results}
+        
+    except Exception as e:
+        logger.error(f"Event Grid webhook error: {e}")
+        return JSONResponse(content={"error": str(e)}, status_code=500)
+
+
+@app.get("/webhook/status")
+async def webhook_status():
+    """Get webhook service status"""
+    return {
+        "service": "DLP Webhook Service",
+        "status": "online",
+        "endpoints": {
+            "test": {
+                "path": "/webhook/test",
+                "method": "GET",
+                "description": "Test endpoint connectivity"
+            },
+            "purview": {
+                "path": "/webhook/purview",
+                "method": "POST",
+                "description": "Receive alerts from Microsoft Purview DLP"
+            },
+            "eventgrid": {
+                "path": "/webhook/eventgrid",
+                "method": "POST",
+                "description": "Receive events from Azure Event Grid (Sentinel)"
+            }
+        },
+        "email_notifications": EMAIL_ENABLED,
+        "timestamp": datetime.utcnow().isoformat()
+    }
 
 
 @app.on_event("startup")
