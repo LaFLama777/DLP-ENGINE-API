@@ -16,6 +16,7 @@ from fastapi import Header
 from typing import Optional
 import hashlib
 import hmac
+from fastapi import Header
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
