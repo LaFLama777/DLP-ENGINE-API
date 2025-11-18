@@ -1,7 +1,6 @@
 #python -m uvicorn app.main:app --reload
 import os
 import sys
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import re
 import traceback
 from datetime import datetime, timedelta
@@ -13,9 +12,8 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func, text
-from email_notifications import send_violation_email, send_socialization_email, GraphEmailNotificationService
 
-
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from database import (
     create_db_and_tables, 
@@ -194,25 +192,31 @@ class SentinelIncidentParser:
             logger.error(f"Payload structure: {list(incident_payload.keys())}")
             raise
 
+# ============================================================================
+# EMAIL NOTIFICATION SETUP - IMPROVED ERROR HANDLING
+# ============================================================================
 EMAIL_ENABLED = False
-email_service = None
+GraphEmailNotificationService = None
 
 try:
+    # Try to import the Graph email service
     from email_notifications import (
-        send_violation_email, 
-        send_socialization_email, 
-        GraphEmailNotificationService
+        GraphEmailNotificationService,
+        send_violation_email,
+        send_socialization_email
     )
     EMAIL_ENABLED = True
-    email_service = GraphEmailNotificationService()
-    logger.info("✓ Email notifications enabled")
-    logger.info(f"✓ Email sender configured: {os.getenv('SENDER_EMAIL', 'NOT SET')}")
+    logger.info("✅ Graph Email notifications enabled")
 except ImportError as e:
+    logger.error(f"❌ Failed to import email_notifications: {e}")
+    logger.error(f"   Make sure email_notifications.py exists in the root directory")
+    logger.error(f"   Current directory: {os.getcwd()}")
+    logger.error(f"   Files in directory: {os.listdir('.')}")
     EMAIL_ENABLED = False
-    logger.warning(f"⚠️ Email notifications disabled - Import error: {e}")
 except Exception as e:
+    logger.error(f"❌ Unexpected error importing email notifications: {e}")
+    logger.error(f"   Traceback: {traceback.format_exc()}")
     EMAIL_ENABLED = False
-    logger.error(f"⚠️ Email notifications disabled - Configuration error: {e}")
 
 # Import UI routes
 try:
@@ -245,7 +249,8 @@ async def health_check():
             "teams_alerts": True,
             "sensitive_data_detection": True,
             "account_revocation": True,
-            "email_notifications": EMAIL_ENABLED
+            "email_notifications": EMAIL_ENABLED,
+            "email_service": "Graph API" if EMAIL_ENABLED else "Disabled"
         }
     }
 
@@ -267,10 +272,11 @@ async def check_email(request: Request, db: Session = Depends(get_db)):
             # Send email notification if enabled
             if EMAIL_ENABLED:
                 try:
-                    send_violation_email(
+                    await send_violation_email(
                         recipient=sender,
                         violation_types=detection_result["violation_types"],
-                        violation_count=violation_count
+                        violation_count=violation_count,
+                        blocked_content=content
                     )
                     logger.info(f"✓ Email notification sent to {sender}")
                 except Exception as e:
@@ -340,15 +346,18 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
         
         # Send email notification if enabled
         email_sent = False
-        if EMAIL_ENABLED:
+        if EMAIL_ENABLED and GraphEmailNotificationService:
             try:
-                logger.info(f"📧 EMAIL_ENABLED=True, attempting to send notification to {user_upn}")
-                violation_types_list = violation_types if isinstance(violation_types, list) else [violation_types]
+                logger.info(f"📧 Attempting to send email notification to {user_upn}")
                 
-                result = send_violation_email(
+                email_service = GraphEmailNotificationService()
+                result = await email_service.send_violation_notification(
                     recipient=user_upn,
-                    violation_types=violation_types_list,
-                    violation_count=new_offense_count
+                    violation_types=violation_types,
+                    violation_count=new_offense_count,
+                    blocked_content_summary=parsed_incident.get("incident_title"),
+                    incident_title=parsed_incident["incident_title"],
+                    file_name=parsed_incident.get("file_name")
                 )
                 
                 if result:
@@ -361,13 +370,14 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
                 logger.error(f"❌ Failed to send email notification: {e}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
         else:
-            logger.warning("⚠️ EMAIL_ENABLED=False, skipping email notification")
+            logger.warning(f"⚠️ Email notifications disabled - skipping email to {user_upn}")
         
         # Send socialization email if threshold reached
         socialization_sent = False
-        if EMAIL_ENABLED and send_socialization_flag:
+        if EMAIL_ENABLED and send_socialization_flag and GraphEmailNotificationService:
             try:
-                send_socialization_email(user_upn, new_offense_count)
+                email_service = GraphEmailNotificationService()
+                await email_service.send_socialization_invitation(user_upn, new_offense_count)
                 socialization_sent = True
                 logger.info(f"✓ Socialization email sent to {user_upn}")
             except Exception as e:
@@ -387,19 +397,19 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
             except Exception as e:
                 logger.error(f"❌ Failed to revoke account for {user_upn}: {e}")
                 logger.error(f"Traceback: {traceback.format_exc()}")
-        else:
-            logger.info(f"ℹ️ User has {new_offense_count} violations (threshold: 3) - no revocation needed yet")
         
         # Send admin alert if high risk
         admin_notified = False
-        if EMAIL_ENABLED and new_offense_count >= 3:
+        if EMAIL_ENABLED and new_offense_count >= 3 and GraphEmailNotificationService:
             try:
-                email_service = EmailNotificationService()
-                email_service.send_admin_alert(
+                email_service = GraphEmailNotificationService()
+                await email_service.send_admin_alert(
                     user=user_upn,
                     incident_title=parsed_incident["incident_title"],
                     violation_count=new_offense_count,
-                    action_taken="Account Revoked" if account_revoked else "Warning Sent"
+                    action_taken="Account Revoked" if account_revoked else "Warning Sent",
+                    violation_types=violation_types,
+                    file_name=parsed_incident.get("file_name")
                 )
                 admin_notified = True
                 logger.info(f"✓ Admin alert sent for {user_upn}")
@@ -461,7 +471,9 @@ async def startup():
     logger.info("=" * 80)
     logger.info("Integration: Azure Logic App → API → Database/Email")
     logger.info("Teams Alerts: Handled by Logic App")
-    logger.info(f"Email Notifications: {'Enabled' if EMAIL_ENABLED else 'Disabled'}")
+    logger.info(f"Email Notifications: {'✅ Enabled (Graph API)' if EMAIL_ENABLED else '❌ Disabled'}")
+    if EMAIL_ENABLED:
+        logger.info("Email Service: Microsoft Graph API")
     logger.info("=" * 80)
 
 
