@@ -38,6 +38,7 @@ class Theme:
 def get_css() -> str:
     return f"""
     <style>
+        /* PURE BLACK THEME v2.0 - Cache Buster */
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
         
         :root {{
@@ -56,9 +57,7 @@ def get_css() -> str:
 
         body {{
             background-color: {Theme.bg_dark};
-            background-image: 
-                radial-gradient(circle at 20% 10%, rgba(59, 130, 246, 0.08) 0%, transparent 40%),
-                radial-gradient(circle at 80% 80%, rgba(16, 185, 129, 0.05) 0%, transparent 40%);
+            background-image: none;
             background-attachment: fixed;
             color: {Theme.text_primary};
             font-family: 'Plus Jakarta Sans', sans-serif;

@@ -33,7 +33,7 @@ def get_base_html_head(title: str) -> str:
             * {{ margin: 0; padding: 0; box-sizing: border-box; }}
             body {{ 
                 font-family: 'Inter', sans-serif; 
-                background: #0f1419; 
+                background: #000000; 
                 color: #e4e6eb; 
                 min-height: 100vh;
             }}
@@ -43,14 +43,14 @@ def get_base_html_head(title: str) -> str:
                 top: 0;
                 width: 240px;
                 height: 100vh;
-                background: #1a1f2e;
-                border-right: 1px solid #2d3748;
+                background: #111111;
+                border-right: 1px solid rgba(255, 255, 255, 0.1);
                 padding: 24px 0;
                 z-index: 1000;
             }}
             .logo {{
                 padding: 0 24px 24px;
-                border-bottom: 1px solid #2d3748;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
                 margin-bottom: 24px;
             }}
             .logo h1 {{
@@ -67,7 +67,7 @@ def get_base_html_head(title: str) -> str:
                 font-size: 14px;
             }}
             .nav-item:hover, .nav-item.active {{
-                background: #2d3748;
+                background: rgba(255, 255, 255, 0.1);
                 color: #60a5fa;
                 border-left: 3px solid #60a5fa;
             }}
@@ -77,8 +77,8 @@ def get_base_html_head(title: str) -> str:
                 min-height: 100vh;
             }}
             .top-bar {{
-                background: #1a1f2e;
-                border: 1px solid #2d3748;
+                background: #111111;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
                 padding: 20px 24px;
                 margin-bottom: 24px;
@@ -124,8 +124,8 @@ def get_base_html_head(title: str) -> str:
                 transform: translateY(-2px);
             }}
             .card {{
-                background: #1a1f2e;
-                border: 1px solid #2d3748;
+                background: #111111;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
                 padding: 24px;
             }}
@@ -147,7 +147,7 @@ def get_base_html_head(title: str) -> str:
             th, td {{
                 padding: 16px;
                 text-align: left;
-                border-bottom: 1px solid #2d3748;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             }}
             th {{
                 color: #9ca3af;
@@ -169,8 +169,8 @@ def get_base_html_head(title: str) -> str:
                 margin-bottom: 24px;
             }}
             .stat-card {{
-                background: #1a1f2e;
-                border: 1px solid #2d3748;
+                background: #111111;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
                 padding: 24px;
                 transition: transform 0.2s;
@@ -211,7 +211,7 @@ def get_base_html_head(title: str) -> str:
             }}
             .pagination a {{
                 padding: 8px 16px;
-                background: #2d3748;
+                background: rgba(255, 255, 255, 0.1);
                 color: #e4e6eb;
                 text-decoration: none;
                 border-radius: 6px;
@@ -224,8 +224,8 @@ def get_base_html_head(title: str) -> str:
                 background: #60a5fa;
             }}
             .filter-bar {{
-                background: #1a1f2e;
-                border: 1px solid #2d3748;
+                background: #111111;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 border-radius: 12px;
                 padding: 20px;
                 margin-bottom: 24px;
@@ -234,8 +234,8 @@ def get_base_html_head(title: str) -> str:
                 align-items: center;
             }}
             .filter-bar input, .filter-bar select {{
-                background: #0f1419;
-                border: 1px solid #2d3748;
+                background: #000000;
+                border: 1px solid rgba(255, 255, 255, 0.1);
                 color: #e4e6eb;
                 padding: 10px 15px;
                 border-radius: 8px;
@@ -318,7 +318,7 @@ async def dashboard(db: Session = Depends(get_db)):
         for inc in recent_incidents[:5]:
             timestamp_wib = (inc.timestamp + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
             recent_html += f'''
-            <div style="background: #0f1419; border: 1px solid #2d3748; border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: all 0.2s;" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateX(4px)'" onmouseout="this.style.borderColor='#2d3748'; this.style.transform='translateX(0)'">
+            <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: all 0.2s;" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateX(4px)'" onmouseout="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.transform='translateX(0)'">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                     <div style="font-size: 14px; font-weight: 500; color: #e4e6eb; flex: 1;">{inc.incident_title}</div>
                     <span style="padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: rgba(239, 68, 68, 0.2); color: #f87171;">HIGH</span>
@@ -430,17 +430,17 @@ async def dashboard(db: Session = Depends(get_db)):
                         plugins: {{
                             legend: {{ display: false }},
                             tooltip: {{
-                                backgroundColor: '#1a1f2e',
+                                backgroundColor: '#111111',
                                 titleColor: '#e4e6eb',
                                 bodyColor: '#9ca3af',
-                                borderColor: '#2d3748',
+                                borderColor: 'rgba(255, 255, 255, 0.1)',
                                 borderWidth: 1
                             }}
                         }},
                         scales: {{
                             y: {{
                                 beginAtZero: true,
-                                grid: {{ color: '#2d3748' }},
+                                grid: {{ color: 'rgba(255, 255, 255, 0.1)' }},
                                 ticks: {{ color: '#9ca3af', stepSize: 1 }}
                             }},
                             x: {{
@@ -477,10 +477,10 @@ async def dashboard(db: Session = Depends(get_db)):
                                 }}
                             }},
                             tooltip: {{
-                                backgroundColor: '#1a1f2e',
+                                backgroundColor: '#111111',
                                 titleColor: '#e4e6eb',
                                 bodyColor: '#9ca3af',
-                                borderColor: '#2d3748',
+                                borderColor: 'rgba(255, 255, 255, 0.1)',
                                 borderWidth: 1
                             }}
                         }}
@@ -745,27 +745,27 @@ async def health_check_page():
                 </div>
                 
                 <div style="display: grid; gap: 16px;">
-                    <div style="background: #0f1419; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🗄️ Database</span>
                         <span style="color: {db_color}; font-size: 16px; font-weight: 600;">{db_icon} {db_status}</span>
                     </div>
-                    <div style="background: #0f1419; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">✉️ Email Notifications</span>
                         <span style="font-size: 16px; font-weight: 600;">{'✅ Enabled' if email_enabled else '⚠️ Disabled'}</span>
                     </div>
-                    <div style="background: #0f1419; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">📢 Teams Alerts</span>
                         <span style="font-size: 16px; font-weight: 600;">✅ Via Logic App</span>
                     </div>
-                    <div style="background: #0f1419; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🔍 Sensitive Data Detection</span>
                         <span style="font-size: 16px; font-weight: 600;">✅ Active</span>
                     </div>
-                    <div style="background: #0f1419; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🔒 Account Revocation</span>
                         <span style="font-size: 16px; font-weight: 600;">✅ Active</span>
                     </div>
-                    <div style="background: #0f1419; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🕐 Timestamp</span>
                         <span style="font-size: 16px; font-weight: 600;">{datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")} UTC</span>
                     </div>
@@ -818,7 +818,7 @@ async def stats_page(db: Session = Depends(get_db)):
         for inc in recent:
             timestamp_wib = (inc.timestamp + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
             recent_html += f'''
-            <div style="background: #0f1419; border: 1px solid #2d3748; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+            <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 16px; margin-bottom: 12px;">
                 <div style="font-weight: 600; margin-bottom: 8px;">{inc.incident_title}</div>
                 <div style="font-size: 12px; color: #9ca3af;">
                     <strong>User:</strong> {inc.user_principal_name} • <strong>Time:</strong> {timestamp_wib} WIB
