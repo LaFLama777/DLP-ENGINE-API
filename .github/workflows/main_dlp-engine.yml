@@ -17,11 +17,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Create and activate virtual environment
+        run: |
+          python -m venv antenv
+          source antenv/bin/activate
+
+      - name: Install dependencies
+        run: |
+          source antenv/bin/activate
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify uvicorn installation
+        run: |
+          source antenv/bin/activate
+          pip show uvicorn
+          python -c "import uvicorn.workers; print('uvicorn.workers imported successfully')"
+
+      - name: Create deployment package
+        run: |
+          zip -r deploy.zip . -x "*.git*" "venv/*" "__pycache__/*" "*.pyc"
+
       - name: Login to Azure
         uses: azure/login@v1
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D3DE827DA83F4F9885C1CC7790D0074D }} 
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_57CA9D22551D47C486A0B3193DA0999F }} 
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_D3DE827DA83F4F9885C1CC7790D0074D }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_57CA9D22551D47C486A0B3193DA0999F }}
           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_BEA9B4522B434F0B9B42CBCE7ED5A35D }}
 
       - name: 'Deploy to Azure Web App'

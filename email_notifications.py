@@ -137,7 +137,7 @@ class GraphEmailNotificationService:
             return False
     
     async def send_violation_notification(
-        self, 
+        self,
         recipient: str,
         violation_types: List[str],
         violation_count: int,
@@ -147,7 +147,7 @@ class GraphEmailNotificationService:
     ) -> bool:
         """
         Send DLP violation notification email
-        
+
         Args:
             recipient: User's email address
             violation_types: List of violation types detected
@@ -155,11 +155,22 @@ class GraphEmailNotificationService:
             blocked_content_summary: Sample of blocked content (will be masked)
             incident_title: Title of the incident
             file_name: Name of the file that triggered the violation
-            
+
         Returns:
             bool: True if email sent successfully
         """
-        
+
+        # ⚠️ CRITICAL: ALWAYS MASK ALL SENSITIVE DATA BEFORE PROCESSING
+        # This prevents the notification emails from triggering DLP policies
+        if blocked_content_summary:
+            blocked_content_summary = self.mask_sensitive_data(str(blocked_content_summary))
+
+        if incident_title:
+            incident_title = self.mask_sensitive_data(str(incident_title))
+
+        if file_name:
+            file_name = self.mask_sensitive_data(str(file_name))
+
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
             logger.error("❌ Email credentials not configured!")
             return False
@@ -170,8 +181,9 @@ class GraphEmailNotificationService:
         # Determine severity
         is_critical = violation_count >= 3
         is_warning = violation_count >= 2
-        
-        subject = f"{'🚨 CRITICAL' if is_critical else '⚠️'} Email Blocked - DLP Policy Violation #{violation_count}"
+
+        # DLP-safe subject line (no emojis, clear categorization for exception rules)
+        subject = f"[{'CRITICAL' if is_critical else 'WARNING'}] Email Blocked - DLP Policy Violation #{violation_count}"
         
         # Build violation tags HTML
         violation_tags_html = ""
@@ -397,7 +409,7 @@ class GraphEmailNotificationService:
                     <div class="redacted-box">
                         <p><strong>Sample of blocked content:</strong></p>
                         <p style="font-size: 14px; margin-top: 10px;">
-                            {self.mask_sensitive_data(blocked_content_summary)}
+                            {blocked_content_summary}
                         </p>
                         <p style="font-size: 11px; color: #856404; margin-top: 15px; border-top: 1px dashed #ffc107; padding-top: 10px;">
                             ⚠️ <strong>Note:</strong> Actual sensitive data has been redacted for security purposes. The original content contained identifiable information.
@@ -482,8 +494,9 @@ class GraphEmailNotificationService:
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
             logger.error("Email credentials not configured")
             return False
-        
-        subject = "📚 MANDATORY: Security Training Required - DLP Policy Socialization"
+
+        # DLP-safe subject line (no emojis)
+        subject = "[MANDATORY] Security Training Required - DLP Policy Socialization"
         
         html_content = f"""
         <!DOCTYPE html>
@@ -715,7 +728,7 @@ class GraphEmailNotificationService:
         return await self.send_email_via_graph(recipient, subject, html_content)
     
     async def send_admin_alert(
-        self, 
+        self,
         user: str,
         incident_title: str,
         violation_count: int,
@@ -725,7 +738,7 @@ class GraphEmailNotificationService:
     ) -> bool:
         """
         Send alert to admin about high-risk user activity
-        
+
         Args:
             user: User's email address
             incident_title: Title of the incident
@@ -733,21 +746,30 @@ class GraphEmailNotificationService:
             action_taken: Action performed by the system
             violation_types: Types of violations detected
             file_name: Name of the file involved
-            
+
         Returns:
             bool: True if email sent successfully
         """
-        
+
+        # ⚠️ CRITICAL: MASK ALL SENSITIVE DATA BEFORE PROCESSING
+        # Admin emails must also be DLP-safe
+        if incident_title:
+            incident_title = self.mask_sensitive_data(str(incident_title))
+
+        if file_name:
+            file_name = self.mask_sensitive_data(str(file_name))
+
         if not self.admin_email:
             logger.warning("Admin email not configured")
             return False
-        
+
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
             logger.error("Email credentials not configured")
             return False
-        
+
         is_critical = violation_count >= 3
-        subject = f"{'🚨 CRITICAL ALERT' if is_critical else '⚠️ Security Alert'}: High-Risk Activity - {user}"
+        # DLP-safe subject line (no emojis, clear categorization)
+        subject = f"[{'CRITICAL' if is_critical else 'ALERT'}] High-Risk Activity: {user}"
         
         violation_types_str = ", ".join(violation_types) if violation_types else "Unknown"
         
