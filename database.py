@@ -1,9 +1,9 @@
 import os
 from datetime import datetime
+from typing import Optional, Dict, Any, List, Tuple
 from dotenv import load_dotenv
-from sqlalchemy import create_engine, Column, Integer, String, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import create_engine, Column, Integer, String, DateTime, Index
+from sqlalchemy.orm import sessionmaker, Session, DeclarativeBase
 import logging
 
 # Load environment variables
@@ -49,38 +49,49 @@ else:
     )
     logger.info("✓ Using PostgreSQL database (Supabase)")
 
-# Test database connection
-#try:
- #   with engine.connect() as connection:
-  #      connection.execute("SELECT 1")
-   # logger.info("✓ Database connection successful!")
-#except Exception as e:
- #   logger.error(f"✗ Database connection failed: {e}")
-  #  raise
 
-# Create base class for models
-Base = declarative_base()
+# SQLAlchemy 2.0 declarative base
+class Base(DeclarativeBase):
+    """Base class for all database models"""
+    pass
 
 # Define Offense model
 class Offense(Base):
     """Model for storing DLP offense records"""
     __tablename__ = 'offenses'
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    user_principal_name = Column(String, index=True, nullable=False)
-    incident_title = Column(String, nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow, index=True)
-    
-    def __repr__(self):
+    user_principal_name = Column(String(255), index=True, nullable=False)
+    incident_title = Column(String(500), nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
+
+    # Composite index for efficient user history queries
+    __table_args__ = (
+        Index('idx_user_timestamp', 'user_principal_name', 'timestamp'),
+    )
+
+    def __repr__(self) -> str:
         return f"<Offense(id={self.id}, user={self.user_principal_name}, timestamp={self.timestamp})>"
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert offense to dictionary for JSON serialization"""
+        return {
+            "id": self.id,
+            "user_principal_name": self.user_principal_name,
+            "incident_title": self.incident_title,
+            "timestamp": self.timestamp.isoformat() if self.timestamp else None
+        }
 
 # Create session maker
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def create_db_and_tables():
+def create_db_and_tables() -> None:
     """
     Initialize the database and create tables if they don't exist.
     Safe to call multiple times - only creates tables that don't exist.
+
+    Raises:
+        Exception: If table creation fails
     """
     try:
         Base.metadata.create_all(bind=engine)
@@ -89,17 +100,20 @@ def create_db_and_tables():
         logger.error(f"✗ Failed to create tables: {e}")
         raise
 
-def log_offense(db, user_upn: str, title: str):
+def log_offense(db: Session, user_upn: str, title: str) -> Offense:
     """
     Add a new offense record to the database.
-    
+
     Args:
         db: SQLAlchemy session object
         user_upn: The user's principal name (email)
         title: The incident title/description
-        
+
     Returns:
         Offense: The created offense record
+
+    Raises:
+        Exception: If database operation fails
     """
     try:
         new_offense = Offense(
@@ -116,16 +130,16 @@ def log_offense(db, user_upn: str, title: str):
         logger.error(f"✗ Failed to log offense: {e}")
         raise
 
-def get_offense_count(db, user_upn: str) -> int:
+def get_offense_count(db: Session, user_upn: str) -> int:
     """
     Get the count of previous offenses for a given user.
-    
+
     Args:
         db: SQLAlchemy session object
         user_upn: The user's principal name (email)
-        
+
     Returns:
-        int: Number of offenses for this user
+        int: Number of offenses for this user (0 if error occurs)
     """
     try:
         count = db.query(Offense).filter(
@@ -137,17 +151,60 @@ def get_offense_count(db, user_upn: str) -> int:
         logger.error(f"✗ Failed to get offense count: {e}")
         return 0
 
-def get_all_offenses(db, limit: int = 100, offset: int = 0):
+def log_offense_and_get_count(db: Session, user_upn: str, title: str) -> Tuple[Offense, int]:
     """
-    Get all offenses with pagination.
-    
+    Optimized function to log offense and get count in a single transaction.
+
+    This eliminates the N+1 query problem by combining log_offense() and get_offense_count().
+
     Args:
         db: SQLAlchemy session object
-        limit: Maximum number of records to return
-        offset: Number of records to skip
-        
+        user_upn: The user's principal name (email)
+        title: The incident title/description
+
     Returns:
-        list: List of Offense objects
+        Tuple of (new_offense, total_count_after_logging)
+
+    Raises:
+        Exception: If database operation fails
+
+    Example:
+        offense, count = log_offense_and_get_count(db, "user@example.com", "KTP violation")
+        print(f"This is offense #{count} for this user")
+    """
+    try:
+        # Create and add offense
+        new_offense = Offense(
+            user_principal_name=user_upn,
+            incident_title=title
+        )
+        db.add(new_offense)
+        db.commit()
+        db.refresh(new_offense)
+
+        # Get count in same transaction
+        count = db.query(Offense).filter(
+            Offense.user_principal_name == user_upn
+        ).count()
+
+        logger.info(f"✓ Offense logged for user: {user_upn} (total: {count})")
+        return new_offense, count
+    except Exception as e:
+        db.rollback()
+        logger.error(f"✗ Failed to log offense and get count: {e}")
+        raise
+
+def get_all_offenses(db: Session, limit: int = 100, offset: int = 0) -> List[Offense]:
+    """
+    Get all offenses with pagination.
+
+    Args:
+        db: SQLAlchemy session object
+        limit: Maximum number of records to return (default: 100)
+        offset: Number of records to skip (default: 0)
+
+    Returns:
+        List[Offense]: List of Offense objects (empty list if error occurs)
     """
     try:
         offenses = db.query(Offense).order_by(
@@ -158,16 +215,16 @@ def get_all_offenses(db, limit: int = 100, offset: int = 0):
         logger.error(f"✗ Failed to fetch offenses: {e}")
         return []
 
-def get_user_offense_history(db, user_upn: str):
+def get_user_offense_history(db: Session, user_upn: str) -> List[Offense]:
     """
     Get all offenses for a specific user.
-    
+
     Args:
         db: SQLAlchemy session object
         user_upn: The user's principal name (email)
-        
+
     Returns:
-        list: List of Offense objects for this user
+        List[Offense]: List of Offense objects for this user (empty list if error occurs)
     """
     try:
         offenses = db.query(Offense).filter(
@@ -178,25 +235,28 @@ def get_user_offense_history(db, user_upn: str):
         logger.error(f"✗ Failed to fetch user offense history: {e}")
         return []
 
-def get_database_stats(db):
+def get_database_stats(db: Session) -> Dict[str, Any]:
     """
     Get database statistics.
-    
+
     Args:
         db: SQLAlchemy session object
-        
+
     Returns:
-        dict: Database statistics
+        Dict containing:
+        - total_offenses: int - Total number of offenses in database
+        - unique_users: int - Number of unique users with offenses
+        - latest_offense_time: Optional[datetime] - Timestamp of most recent offense
     """
     try:
         total_offenses = db.query(Offense).count()
         unique_users = db.query(Offense.user_principal_name).distinct().count()
-        
+
         # Get most recent offense
         latest_offense = db.query(Offense).order_by(
             Offense.timestamp.desc()
         ).first()
-        
+
         return {
             "total_offenses": total_offenses,
             "unique_users": unique_users,

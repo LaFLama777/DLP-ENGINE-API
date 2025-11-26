@@ -1,8 +1,24 @@
-import os
+"""
+Email Notification Service using Microsoft Graph API
+
+This module provides email notification functionality for DLP violations,
+security training invitations, and admin alerts. All sensitive data is
+automatically masked before being included in emails to prevent DLP loops.
+
+Usage:
+    from email_notifications import GraphEmailNotificationService
+
+    service = GraphEmailNotificationService()
+    await service.send_violation_notification(
+        recipient="user@example.com",
+        violation_types=["KTP", "NPWP"],
+        violation_count=2
+    )
+"""
+
 import logging
 from typing import List, Optional
 from datetime import datetime
-import re
 from azure.identity import ClientSecretCredential
 from msgraph import GraphServiceClient
 from msgraph.generated.users.item.send_mail.send_mail_post_request_body import SendMailPostRequestBody
@@ -12,6 +28,11 @@ from msgraph.generated.models.body_type import BodyType
 from msgraph.generated.models.recipient import Recipient
 from msgraph.generated.models.email_address import EmailAddress
 
+# Import from our modules
+from config import settings
+from exceptions import EmailSendException
+from sensitive_data import SensitiveDataDetector
+
 logger = logging.getLogger(__name__)
 
 
@@ -19,13 +40,13 @@ class GraphEmailNotificationService:
     """Send email notifications using Microsoft Graph API - No SMTP needed!"""
     
     def __init__(self):
-        # Graph API credentials (same as your bot credentials)
-        self.tenant_id = os.getenv("TENANT_ID")
-        self.client_id = os.getenv("BOT_CLIENT_ID")
-        self.client_secret = os.getenv("BOT_CLIENT_SECRET")
-        self.sender_email = os.getenv("SENDER_EMAIL")  # The mailbox to send from
-        self.admin_email = os.getenv("ADMIN_EMAIL", "admin@company.com")
-        
+        # Use centralized configuration from settings
+        self.tenant_id = settings.TENANT_ID
+        self.client_id = settings.BOT_CLIENT_ID
+        self.client_secret = settings.BOT_CLIENT_SECRET
+        self.sender_email = settings.SENDER_EMAIL
+        self.admin_email = settings.ADMIN_EMAIL
+
         # Validate configuration
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
             logger.error("❌ Missing Graph API credentials!")
@@ -33,6 +54,10 @@ class GraphEmailNotificationService:
             logger.error(f"   BOT_CLIENT_ID: {'Set' if self.client_id else 'NOT SET'}")
             logger.error(f"   BOT_CLIENT_SECRET: {'Set' if self.client_secret else 'NOT SET'}")
             logger.error(f"   SENDER_EMAIL: {'Set' if self.sender_email else 'NOT SET'}")
+            raise EmailSendException(
+                "Missing required email configuration",
+                details={"configured_fields": [f for f in ["tenant_id", "client_id", "client_secret", "sender_email"] if getattr(self, f)]}
+            )
         else:
             logger.info("✅ Graph Email Service initialized")
     
@@ -47,34 +72,11 @@ class GraphEmailNotificationService:
             return GraphServiceClient(credentials=credential)
         except Exception as e:
             logger.error(f"❌ Failed to initialize Graph client: {e}")
-            return None
-    
-    @staticmethod
-    def mask_sensitive_data(text: str) -> str:
-        """Mask sensitive data in text for display"""
-        if not text:
-            return ""
-        
-        # Mask KTP (16 digits) - show first 3 and last 3
-        text = re.sub(r'\b(\d{3})\d{10}(\d{3})\b', r'\1***********\2', text)
-        
-        # Mask NPWP - show first 2 and last 2
-        text = re.sub(
-            r'(npwp[:\s-]*)(\d{2})\d{11}(\d{2})', 
-            r'\1\2***********\3', 
-            text, 
-            flags=re.IGNORECASE
-        )
-        
-        # Mask Employee ID
-        text = re.sub(
-            r'\b(EMP|KARY|NIP)([-\s]?)(\d)\d{3}(\d)\b', 
-            r'\1\2\3***\4', 
-            text, 
-            flags=re.IGNORECASE
-        )
-        
-        return text
+            raise EmailSendException(
+                "Failed to initialize Graph client",
+                details={"error": str(e)},
+                original_exception=e
+            )
     
     async def send_email_via_graph(
         self, 
@@ -163,13 +165,13 @@ class GraphEmailNotificationService:
         # ⚠️ CRITICAL: ALWAYS MASK ALL SENSITIVE DATA BEFORE PROCESSING
         # This prevents the notification emails from triggering DLP policies
         if blocked_content_summary:
-            blocked_content_summary = self.mask_sensitive_data(str(blocked_content_summary))
+            blocked_content_summary = SensitiveDataDetector.mask_sensitive_data(str(blocked_content_summary))
 
         if incident_title:
-            incident_title = self.mask_sensitive_data(str(incident_title))
+            incident_title = SensitiveDataDetector.mask_sensitive_data(str(incident_title))
 
         if file_name:
-            file_name = self.mask_sensitive_data(str(file_name))
+            file_name = SensitiveDataDetector.mask_sensitive_data(str(file_name))
 
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
             logger.error("❌ Email credentials not configured!")
@@ -213,8 +215,9 @@ class GraphEmailNotificationService:
                     overflow: hidden;
                 }}
                 .header {{
+                    background-color: {'#dc3545' if is_critical else '#ffc107'};
                     background: {'linear-gradient(135deg, #dc3545 0%, #bd2130 100%)' if is_critical else 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)'};
-                    color: white;
+                    color: {'white' if is_critical else '#212529'};
                     padding: 30px;
                     text-align: center;
                 }}
@@ -520,6 +523,7 @@ class GraphEmailNotificationService:
                     overflow: hidden;
                 }}
                 .header {{
+                    background-color: #007bff;
                     background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
                     color: white;
                     padding: 30px;
@@ -754,10 +758,10 @@ class GraphEmailNotificationService:
         # ⚠️ CRITICAL: MASK ALL SENSITIVE DATA BEFORE PROCESSING
         # Admin emails must also be DLP-safe
         if incident_title:
-            incident_title = self.mask_sensitive_data(str(incident_title))
+            incident_title = SensitiveDataDetector.mask_sensitive_data(str(incident_title))
 
         if file_name:
-            file_name = self.mask_sensitive_data(str(file_name))
+            file_name = SensitiveDataDetector.mask_sensitive_data(str(file_name))
 
         if not self.admin_email:
             logger.warning("Admin email not configured")
@@ -794,8 +798,9 @@ class GraphEmailNotificationService:
                     overflow: hidden;
                 }}
                 .header {{
+                    background-color: {'#dc3545' if is_critical else '#ffc107'};
                     background: {'linear-gradient(135deg, #dc3545 0%, #c82333 100%)' if is_critical else 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)'};
-                    color: white;
+                    color: {'white' if is_critical else '#212529'};
                     padding: 30px;
                     text-align: center;
                 }}

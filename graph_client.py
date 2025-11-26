@@ -1,96 +1,170 @@
-import os
+import logging
+from typing import Optional, Dict, Any
 from azure.identity import ClientSecretCredential
-from msgraph import GraphServiceClient  # Import from msgraph SDK
+from msgraph import GraphServiceClient
+from config import settings
+from exceptions import (
+    AuthenticationException,
+    UserNotFoundException,
+    GraphAPIException,
+    AccountRevocationException
+)
+from cache_service import user_cache
 
-def get_graph_client():
+logger = logging.getLogger(__name__)
+
+
+def get_graph_client() -> GraphServiceClient:
     """
-    Initialize and return a GraphServiceClient using credentials from environment variables.
-    
-    Environment Variables:
-    - TENANT_ID: Azure AD Tenant ID
-    - BOT_CLIENT_ID: Azure AD Application (Client) ID
-    - BOT_CLIENT_SECRET: Azure AD Client Secret
-    
+    Initialize and return a GraphServiceClient using credentials from settings.
+
     Returns:
-    - GraphServiceClient: An instance of the Graph client.
-    
+        GraphServiceClient: An instance of the Graph client.
+
     Raises:
-    - ValueError: If any required environment variables are missing.
-    - Exception: If authentication fails.
+        AuthenticationException: If authentication fails
+
+    Example:
+        client = get_graph_client()
+        user = await client.users.by_user_id(upn).get()
     """
-    tenant_id = os.getenv("TENANT_ID")
-    client_id = os.getenv("BOT_CLIENT_ID")
-    client_secret = os.getenv("BOT_CLIENT_SECRET")
-    
-    if not all([tenant_id, client_id, client_secret]):
-        raise ValueError("Missing required environment variables: TENANT_ID, BOT_CLIENT_ID, or BOT_CLIENT_SECRET")
-    
     try:
-        credential = ClientSecretCredential(tenant_id=tenant_id, client_id=client_id, client_secret=client_secret)
+        credential = ClientSecretCredential(
+            tenant_id=settings.TENANT_ID,
+            client_id=settings.BOT_CLIENT_ID,
+            client_secret=settings.BOT_CLIENT_SECRET
+        )
         client = GraphServiceClient(credentials=credential)
-        print("Graph client initialized successfully.")
+        logger.debug("Graph client initialized successfully")
         return client
     except Exception as e:
-        print(f"Error initializing Graph client: {str(e)}")
-        raise  # Re-raise for the caller to handle if needed
+        logger.error(f"Failed to initialize Graph client: {e}")
+        raise AuthenticationException(
+            "Failed to authenticate with Azure AD",
+            details={
+                "tenant_id": settings.TENANT_ID,
+                "error": str(e)
+            },
+            original_exception=e
+        )
 
-async def get_user_details(user_upn):
+async def get_user_details(user_upn: str) -> Optional[Dict[str, Any]]:
     """
-    Asynchronously fetch user details (displayName, department, jobTitle) for the given User Principal Name (UPN).
-    
+    Fetch user details from Microsoft Graph with caching.
+
     Args:
-    - user_upn (str): The User's Principal Name (e.g., user@example.com).
-    
+        user_upn: The User's Principal Name (e.g., user@example.com)
+
     Returns:
-    - dict: A dictionary with keys 'displayName', 'department', and 'jobTitle' if successful.
-    - None: If the user is not found or an error occurs.
-    
-    Prints:
-    - Success or failure messages.
+        Dictionary with displayName, department, and jobTitle if found, None otherwise
+
+    Raises:
+        GraphAPIException: If Graph API call fails
+
+    Example:
+        user = await get_user_details("user@example.com")
+        if user:
+            print(f"User: {user['displayName']}")
     """
-    client = get_graph_client()  # Get the client (this is synchronous)
-    
+    # Check cache first
+    cached = user_cache.get(user_upn)
+    if cached:
+        logger.debug(f"Cache HIT for user: {user_upn}")
+        return cached
+
+    logger.debug(f"Cache MISS for user: {user_upn} - fetching from Graph API")
+
+    client = get_graph_client()
+
     try:
         # Fetch the user with selected fields
-        user = await client.users.by_user_id(user_upn).get(select=["displayName", "department", "jobTitle"])
-        
-        if user:
-            print(f"Successfully fetched details for user: {user_upn}")
-            return {
-                "displayName": getattr(user, 'display_name', None),  # Use getattr for safety
-                "department": getattr(user, 'department', None),
-                "jobTitle": getattr(user, 'job_title', None)
-            }
-        else:
-            print(f"User {user_upn} not found.")
-            return None
-    except Exception as e:
-        print(f"Error fetching user details for {user_upn}: {str(e)}")
-        return None
+        user = await client.users.by_user_id(user_upn).get(
+            select=["displayName", "department", "jobTitle"]
+        )
 
-async def perform_hard_block(user_upn):
+        if user:
+            user_details = {
+                "displayName": getattr(user, 'display_name', 'Unknown'),
+                "department": getattr(user, 'department', 'Unknown'),
+                "jobTitle": getattr(user, 'job_title', 'Unknown')
+            }
+
+            # Cache the result
+            user_cache.set(user_upn, user_details)
+
+            logger.info(f"Successfully fetched details for user: {user_upn}")
+            return user_details
+        else:
+            logger.warning(f"User not found: {user_upn}")
+            raise UserNotFoundException(
+                f"User not found in Azure AD",
+                details={"upn": user_upn}
+            )
+
+    except UserNotFoundException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching user details for {user_upn}: {e}")
+        raise GraphAPIException(
+            f"Failed to fetch user details",
+            details={"upn": user_upn, "error": str(e)},
+            original_exception=e
+        )
+
+async def perform_hard_block(user_upn: str) -> bool:
     """
-    Asynchronously revoke sign-in sessions and disable the user account by setting accountEnabled to False.
-    
+    Revoke sign-in sessions and disable user account.
+
+    This is a destructive operation that:
+    1. Revokes all active sign-in sessions
+    2. Disables the user account (accountEnabled = False)
+
     Args:
-    - user_upn (str): The User's Principal Name (e.g., user@example.com).
-    
-    Prints:
-    - Success messages for each step.
-    - Failure messages if an error occurs.
-    
-    Note: This operation is destructive and should be used with caution.
+        user_upn: The User's Principal Name (e.g., user@example.com)
+
+    Returns:
+        True if successful
+
+    Raises:
+        AccountRevocationException: If revocation fails
+
+    Warning:
+        This is a destructive operation. Use with extreme caution.
+
+    Example:
+        try:
+            success = await perform_hard_block("user@example.com")
+            if success:
+                logger.info("Account blocked successfully")
+        except AccountRevocationException as e:
+            logger.error(f"Failed to block account: {e}")
     """
-    client = get_graph_client()  # Get the client (this is synchronous)
-    
+    client = get_graph_client()
+
     try:
         # Step 1: Revoke sign-in sessions
+        logger.info(f"Revoking sign-in sessions for: {user_upn}")
         await client.users.by_user_id(user_upn).revoke_sign_in_sessions().post()
-        print(f"Successfully revoked sign-in sessions for user: {user_upn}")
-        
+        logger.info(f"✓ Sign-in sessions revoked for: {user_upn}")
+
         # Step 2: Disable the account
+        logger.info(f"Disabling account for: {user_upn}")
         patch_body = {"accountEnabled": False}
         await client.users.by_user_id(user_upn).patch(patch_body)
-        print(f"Successfully disabled the account for user: {user_upn}")
+        logger.info(f"✓ Account disabled for: {user_upn}")
+
+        # Clear user from cache (their details are now outdated)
+        user_cache.delete(user_upn)
+
+        return True
+
     except Exception as e:
-        print(f"Error performing hard block for user {user_upn}: {str(e)}")
+        logger.error(f"Failed to perform hard block for {user_upn}: {e}")
+        raise AccountRevocationException(
+            f"Failed to revoke account access",
+            details={
+                "upn": user_upn,
+                "error": str(e)
+            },
+            original_exception=e
+        )

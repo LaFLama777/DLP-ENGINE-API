@@ -8,6 +8,9 @@ python-dotenv==1.0.1
 SQLAlchemy==2.0.25
 psycopg2-binary==2.9.9
 
+# Supabase (if using Supabase for database)
+supabase>=2.0.0  # Optional: Only if using Supabase client
+
 # Azure & Microsoft Graph API
 azure-core==1.30.0
 azure-identity==1.15.0
@@ -24,7 +27,7 @@ microsoft-kiota-serialization-multipart==0.1.0
 # Authentication
 msal==1.26.0
 msal-extensions==1.1.0
-PyJWT==2.8.0
+PyJWT[crypto]>=2.10.1  # Required by Supabase auth
 
 # HTTP & Async
 httpx==0.26.0
@@ -33,7 +36,9 @@ requests==2.31.0
 anyio==4.2.0
 
 # Data Validation
-pydantic==2.5.3
+pydantic>=2.11.7  # Required by Supabase packages
+pydantic-settings==2.1.0
+email-validator>=2.0.0
 
 # Date/Time
 python-dateutil==2.8.2
@@ -41,7 +46,7 @@ python-dateutil==2.8.2
 # Essential
 certifi==2024.2.2
 cryptography==42.0.0
-typing-extensions==4.9.0
+typing-extensions>=4.14.0  # Required by Supabase packages
 idna==3.6
 charset-normalizer==3.3.2
 urllib3==2.1.0
