@@ -1967,9 +1967,6 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
     """Handle admin actions for incidents: education, warning, or revoke"""
     try:
         from database import Offense
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
 
         action = request.get("action")
         user_email = request.get("user_email")
@@ -2120,22 +2117,21 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
         # Send email if email service is configured
         if EMAIL_ENABLED:
             try:
-                msg = MIMEMultipart('alternative')
-                msg['From'] = settings.SMTP_FROM_EMAIL
-                msg['To'] = user_email
-                msg['Subject'] = subject
-                msg.attach(MIMEText(body, 'html'))
+                # Use Microsoft Graph API to send email
+                import asyncio
+                success = asyncio.run(email_service.send_email_via_graph(
+                    recipient=user_email,
+                    subject=subject,
+                    html_body=body
+                ))
 
-                with smtplib.SMTP(settings.SMTP_SERVER, settings.SMTP_PORT) as server:
-                    if settings.SMTP_USE_TLS:
-                        server.starttls()
-                    if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
-                        server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
-                    server.send_message(msg)
-
-                logger.info(f"Action '{action}' completed for user {user_email} - Incident #{incident_id}")
+                if success:
+                    logger.info(f"✅ Action '{action}' completed for user {user_email} - Incident #{incident_id}")
+                else:
+                    logger.error(f"❌ Failed to send email for action '{action}' - Graph API returned false")
+                    return JSONResponse({"detail": "Action logged but email failed to send via Graph API"}, status_code=500)
             except Exception as e:
-                logger.error(f"Failed to send email for action '{action}': {e}")
+                logger.error(f"❌ Failed to send email for action '{action}': {e}")
                 return JSONResponse({"detail": f"Action logged but email failed: {str(e)}"}, status_code=500)
         else:
             logger.info(f"Action '{action}' logged for user {user_email} (email service disabled)")
