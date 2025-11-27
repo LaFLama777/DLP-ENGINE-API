@@ -2107,9 +2107,23 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
             """
             message_text = "Account access revocation initiated - User notified"
 
-            # TODO: Integrate with Microsoft Graph API to actually disable the account
-            # For now, just send the notification email
-            logger.warning(f"REVOKE ACTION: User {user_email} - Incident #{incident_id} - Manual intervention required")
+            # Actually revoke user access via Microsoft Graph API
+            if EMAIL_ENABLED:
+                try:
+                    logger.info(f"🚨 Revoking access for user: {user_email}")
+                    revoke_result = await email_service.revoke_user_access(user_email)
+
+                    if revoke_result["ok"]:
+                        logger.info(f"✅ Successfully revoked access for {user_email}: Account blocked={revoke_result['blocked']}, Sessions revoked={revoke_result['sessions_revoked']}")
+                        message_text = f"Account DISABLED and sessions REVOKED for {user_email}"
+                    else:
+                        logger.error(f"❌ Failed to revoke access for {user_email}: {revoke_result['message']}")
+                        message_text = f"Revocation attempted but failed: {revoke_result['message']}"
+                except Exception as e:
+                    logger.error(f"❌ Exception during revocation for {user_email}: {e}")
+                    message_text = f"Revocation error: {str(e)}"
+            else:
+                logger.warning(f"REVOKE ACTION: User {user_email} - Incident #{incident_id} - Email service disabled, cannot revoke access")
 
         else:
             return JSONResponse({"detail": "Invalid action"}, status_code=400)
@@ -2117,13 +2131,12 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
         # Send email if email service is configured
         if EMAIL_ENABLED:
             try:
-                # Use Microsoft Graph API to send email
-                import asyncio
-                success = asyncio.run(email_service.send_email_via_graph(
+                # Use Microsoft Graph API to send email (await since we're in async context)
+                success = await email_service.send_email_via_graph(
                     recipient=user_email,
                     subject=subject,
                     html_body=body
-                ))
+                )
 
                 if success:
                     logger.info(f"✅ Action '{action}' completed for user {user_email} - Incident #{incident_id}")

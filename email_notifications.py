@@ -1009,6 +1009,139 @@ class GraphEmailNotificationService:
         
         return await self.send_email_via_graph(self.admin_email, subject, html_content)
 
+    async def revoke_user_sessions(self, user_email: str) -> dict:
+        """
+        Revoke all active sign-in sessions for a user
+
+        Args:
+            user_email: User's email address (UPN)
+
+        Returns:
+            dict: {"ok": bool, "status": int, "message": str}
+        """
+        try:
+            client = self._get_graph_client()
+
+            # Call Microsoft Graph API to revoke sessions
+            await client.users.by_user_id(user_email).revoke_sign_in_sessions.post()
+
+            logger.info(f"✅ Revoked all sign-in sessions for user: {user_email}")
+            return {
+                "ok": True,
+                "status": 200,
+                "message": f"All sign-in sessions revoked for {user_email}"
+            }
+
+        except Exception as e:
+            logger.error(f"❌ Failed to revoke sessions for {user_email}: {e}")
+            return {
+                "ok": False,
+                "status": 500,
+                "message": f"Failed to revoke sessions: {str(e)}"
+            }
+
+    async def block_user_account(self, user_email: str, block: bool = True) -> dict:
+        """
+        Block or unblock a user account
+
+        Args:
+            user_email: User's email address (UPN)
+            block: True to block account, False to unblock
+
+        Returns:
+            dict: {"ok": bool, "status": int, "message": str}
+        """
+        try:
+            client = self._get_graph_client()
+
+            # Prepare the update payload
+            from msgraph.generated.models.user import User
+            user_update = User()
+            user_update.account_enabled = not block  # accountEnabled=false blocks the user
+
+            # Update user account status
+            await client.users.by_user_id(user_email).patch(user_update)
+
+            action = "blocked" if block else "unblocked"
+            logger.info(f"✅ Successfully {action} user account: {user_email}")
+            return {
+                "ok": True,
+                "status": 200,
+                "message": f"User account {action}: {user_email}"
+            }
+
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"❌ Failed to {'block' if block else 'unblock'} user {user_email}: {e}")
+            logger.error(f"   Exception type: {type(e).__name__}")
+
+            # Check for common permission errors
+            if "Insufficient privileges" in error_msg or "Authorization_RequestDenied" in error_msg:
+                logger.error("   ⚠️ PERMISSION ISSUE: Missing User.ReadWrite.All or admin consent not granted")
+                logger.error("   📋 See AZURE_PERMISSIONS.md for setup instructions")
+            elif "Resource" in error_msg and "not found" in error_msg:
+                logger.error(f"   ⚠️ USER NOT FOUND: {user_email} doesn't exist in Azure AD")
+
+            return {
+                "ok": False,
+                "status": 500,
+                "message": f"Failed to {'block' if block else 'unblock'} account: {str(e)}"
+            }
+
+    async def revoke_user_access(self, user_email: str) -> dict:
+        """
+        Full revocation: Block account AND revoke all sessions
+
+        This is the recommended approach for high-risk users.
+
+        Args:
+            user_email: User's email address (UPN)
+
+        Returns:
+            dict: {"ok": bool, "blocked": bool, "sessions_revoked": bool, "message": str}
+        """
+        logger.info(f"🚨 Initiating full access revocation for user: {user_email}")
+
+        # Step 1: Block the account
+        block_result = await self.block_user_account(user_email, block=True)
+
+        # Log block result details
+        if not block_result["ok"]:
+            logger.error(f"   ❌ Account blocking failed: {block_result.get('message', 'Unknown error')}")
+
+        # Step 2: Revoke all active sessions
+        sessions_result = await self.revoke_user_sessions(user_email)
+
+        # Log sessions result details
+        if not sessions_result["ok"]:
+            logger.error(f"   ❌ Session revocation failed: {sessions_result.get('message', 'Unknown error')}")
+
+        overall_success = block_result["ok"] and sessions_result["ok"]
+
+        if overall_success:
+            logger.info(f"✅ Full access revocation completed for {user_email}")
+            message = f"Account blocked and all sessions revoked for {user_email}"
+        else:
+            logger.warning(f"⚠️ Partial revocation for {user_email}")
+            message = f"Partial revocation: Block={block_result['ok']}, Sessions={sessions_result['ok']}"
+
+            # Add detailed failure message
+            if not block_result["ok"]:
+                message += f" | Block error: {block_result.get('message', 'Unknown')}"
+            if not sessions_result["ok"]:
+                message += f" | Sessions error: {sessions_result.get('message', 'Unknown')}"
+
+        return {
+            "ok": overall_success,
+            "blocked": block_result["ok"],
+            "sessions_revoked": sessions_result["ok"],
+            "message": message,
+            "details": {
+                "block_result": block_result,
+                "sessions_result": sessions_result
+            }
+        }
+
 
 # Utility functions for backward compatibility
 async def send_violation_email(
