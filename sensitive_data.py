@@ -201,6 +201,38 @@ class SensitiveDataDetector:
             ]
         }
 
+    @classmethod
+    def mask_email(cls, email: str) -> str:
+        """
+        Mask an email address for privacy protection.
+
+        Masks the local part of the email, keeping first 2 and last 2 characters visible.
+
+        Args:
+            email: Email address to mask
+
+        Returns:
+            Masked email address
+
+        Example:
+            >>> SensitiveDataDetector.mask_email("john.doe@example.com")
+            'jo****oe@example.com'
+        """
+        if not email or '@' not in email:
+            return email
+
+        try:
+            local, domain = email.split('@', 1)
+            if len(local) <= 4:
+                # For short emails, mask middle characters only
+                masked_local = local[0] + '*' * (len(local) - 1)
+            else:
+                # Keep first 2 and last 2 characters
+                masked_local = local[:2] + '*' * (len(local) - 4) + local[-2:]
+            return f"{masked_local}@{domain}"
+        except:
+            return email
+
 
 # Example usage and testing
 if __name__ == "__main__":
