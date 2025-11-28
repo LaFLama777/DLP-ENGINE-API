@@ -83,6 +83,7 @@ from database import (
 )
 from graph_client import get_user_details, perform_hard_block
 from email_notifications import GraphEmailNotificationService
+from app.ui_components import get_professional_sidebar, get_sidebar_css, get_sidebar_javascript, Icons
 from app.decision_engine import (
     AdvancedDecisionEngine,
     IncidentContext,
@@ -462,8 +463,19 @@ async def root():
             }
 
             .card-icon {
-                font-size: 1.5rem;
-                filter: grayscale(0.3);
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .card-icon svg {
+                width: 24px;
+                height: 24px;
+                stroke: #71717a;
+                stroke-width: 2;
+                fill: none;
             }
 
             .card-value {
@@ -716,12 +728,335 @@ async def root():
                     font-size: 2.5rem;
                 }
             }
+
+            /* Professional Collapsible Sidebar */
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 280px;
+                height: 100vh;
+                background: linear-gradient(180deg, #0f0f0f 0%, #000000 100%);
+                border-right: 1px solid rgba(255, 255, 255, 0.08);
+                transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                z-index: 1000;
+                overflow: hidden;
+            }
+
+            .sidebar.collapsed {
+                width: 64px;
+            }
+
+            .sidebar-header {
+                padding: 24px 20px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                height: 72px;
+            }
+
+            .sidebar-brand {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                white-space: nowrap;
+                overflow: hidden;
+            }
+
+            .brand-icon {
+                width: 32px;
+                height: 32px;
+                background: linear-gradient(135deg, #ffffff 0%, #a3a3a3 100%);
+                border-radius: 8px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 800;
+                color: #000;
+                flex-shrink: 0;
+            }
+
+            .brand-text {
+                display: flex;
+                flex-direction: column;
+                opacity: 1;
+                transition: opacity 0.2s;
+            }
+
+            .sidebar.collapsed .brand-text {
+                opacity: 0;
+                width: 0;
+            }
+
+            .brand-title {
+                font-size: 15px;
+                font-weight: 700;
+                color: #ffffff;
+                letter-spacing: -0.01em;
+            }
+
+            .brand-subtitle {
+                font-size: 10px;
+                color: #737373;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+            }
+
+            .sidebar-toggle {
+                width: 28px;
+                height: 28px;
+                border-radius: 6px;
+                background: rgba(255, 255, 255, 0.05);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                flex-shrink: 0;
+            }
+
+            .sidebar-toggle:hover {
+                background: rgba(255, 255, 255, 0.1);
+                border-color: rgba(255, 255, 255, 0.2);
+            }
+
+            .sidebar-toggle svg {
+                width: 16px;
+                height: 16px;
+                stroke: #a3a3a3;
+                transition: transform 0.3s;
+            }
+
+            .sidebar.collapsed .sidebar-toggle svg {
+                transform: rotate(180deg);
+            }
+
+            .sidebar-nav {
+                padding: 16px 8px;
+                overflow-y: auto;
+                height: calc(100vh - 72px);
+            }
+
+            .sidebar-nav::-webkit-scrollbar {
+                width: 4px;
+            }
+
+            .sidebar-nav::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 2px;
+            }
+
+            .nav-section {
+                margin-bottom: 24px;
+            }
+
+            .nav-section-title {
+                padding: 8px 12px;
+                font-size: 10px;
+                font-weight: 600;
+                color: #525252;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                white-space: nowrap;
+                overflow: hidden;
+                transition: opacity 0.2s;
+            }
+
+            .sidebar.collapsed .nav-section-title {
+                opacity: 0;
+                height: 0;
+                padding: 0;
+            }
+
+            .nav-item {
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                padding: 10px 12px;
+                margin: 2px 0;
+                border-radius: 8px;
+                color: #a3a3a3;
+                text-decoration: none;
+                font-size: 14px;
+                font-weight: 500;
+                transition: all 0.2s;
+                white-space: nowrap;
+                position: relative;
+            }
+
+            .nav-item:hover {
+                background: rgba(255, 255, 255, 0.05);
+                color: #ffffff;
+            }
+
+            .nav-item.active {
+                background: rgba(255, 255, 255, 0.08);
+                color: #ffffff;
+            }
+
+            .nav-item.active::before {
+                content: '';
+                position: absolute;
+                left: 0;
+                top: 50%;
+                transform: translateY(-50%);
+                width: 3px;
+                height: 20px;
+                background: #ffffff;
+                border-radius: 0 2px 2px 0;
+            }
+
+            .nav-icon {
+                width: 20px;
+                height: 20px;
+                flex-shrink: 0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            .nav-icon svg {
+                width: 18px;
+                height: 18px;
+                stroke: currentColor;
+                fill: none;
+            }
+
+            .nav-text {
+                overflow: hidden;
+                opacity: 1;
+                transition: opacity 0.2s;
+            }
+
+            .sidebar.collapsed .nav-text {
+                opacity: 0;
+                width: 0;
+            }
+
+            /* Main content adjustment */
+            .main-wrapper {
+                margin-left: 280px;
+                transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            .main-wrapper.sidebar-collapsed {
+                margin-left: 64px;
+            }
+
+            @media (max-width: 768px) {
+                .sidebar {
+                    transform: translateX(-100%);
+                }
+                .main-wrapper {
+                    margin-left: 0 !important;
+                }
+            }
         </style>
     </head>
     <body>
+        <!-- Professional Collapsible Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="sidebar-brand">
+                    <div class="brand-icon">D</div>
+                    <div class="brand-text">
+                        <div class="brand-title">DLP Engine</div>
+                        <div class="brand-subtitle">Enterprise</div>
+                    </div>
+                </div>
+                <div class="sidebar-toggle" onclick="toggleSidebar()">
+                    <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="3" y1="12" x2="21" y2="12"></line>
+                        <line x1="3" y1="6" x2="21" y2="6"></line>
+                        <line x1="3" y1="18" x2="21" y2="18"></line>
+                    </svg>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <div class="nav-section-title">Overview</div>
+                    <a href="/" class="nav-item active">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="3" width="7" height="7"></rect>
+                                <rect x="14" y="14" width="7" height="7"></rect>
+                                <rect x="3" y="14" width="7" height="7"></rect>
+                            </svg>
+                        </div>
+                        <span class="nav-text">Dashboard</span>
+                    </a>
+                    <a href="/incidents" class="nav-item">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </div>
+                        <span class="nav-text">All Incidents</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Monitoring</div>
+                    <a href="/health" class="nav-item">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                            </svg>
+                        </div>
+                        <span class="nav-text">System Health</span>
+                    </a>
+                    <a href="/redoc" class="nav-item">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="16" y1="13" x2="8" y2="13"></line>
+                                <line x1="16" y1="17" x2="8" y2="17"></line>
+                                <polyline points="10 9 9 9 8 9"></polyline>
+                            </svg>
+                        </div>
+                        <span class="nav-text">API Documentation</span>
+                    </a>
+                </div>
+
+                <div class="nav-section">
+                    <div class="nav-section-title">Resources</div>
+                    <a href="https://github.com/anthropics/claude-code" target="_blank" class="nav-item">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path>
+                                <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path>
+                            </svg>
+                        </div>
+                        <span class="nav-text">Documentation</span>
+                    </a>
+                    <a href="https://portal.azure.com" target="_blank" class="nav-item">
+                        <div class="nav-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"></path>
+                            </svg>
+                        </div>
+                        <span class="nav-text">Azure Portal</span>
+                    </a>
+                </div>
+            </nav>
+        </div>
+
+        <div class="main-wrapper" id="mainWrapper">
         <div class="container">
             <div class="header">
-                <h1>🛡️ DLP Remediation Engine</h1>
+                <h1>
+                    <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 12px;">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                    DLP Remediation Engine
+                </h1>
                 <p>Enterprise-Grade Data Loss Prevention & Automated Remediation</p>
                 <div class="status-badge" id="status">
                     <span>●</span>
@@ -733,32 +1068,58 @@ async def root():
             <div class="grid">
                 <div class="card">
                     <div class="card-title">
-                        <span class="card-icon">🚨</span>
-                        Total Violations
+                        <span class="card-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                        </span>
+                        TOTAL VIOLATIONS
                     </div>
                     <div class="card-value" id="total-violations">--</div>
                     <div class="card-description">All-time incidents detected</div>
                 </div>
                 <div class="card">
                     <div class="card-title">
-                        <span class="card-icon">📅</span>
-                        Today's Violations
+                        <span class="card-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                            </svg>
+                        </span>
+                        TODAY'S VIOLATIONS
                     </div>
                     <div class="card-value" id="today-violations">--</div>
                     <div class="card-description">Incidents detected today</div>
                 </div>
                 <div class="card">
                     <div class="card-title">
-                        <span class="card-icon">👥</span>
-                        Monitored Users
+                        <span class="card-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                                <circle cx="9" cy="7" r="4"></circle>
+                                <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                                <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                        </span>
+                        MONITORED USERS
                     </div>
                     <div class="card-value" id="total-users">--</div>
                     <div class="card-description">Unique users tracked</div>
                 </div>
                 <div class="card">
                     <div class="card-title">
-                        <span class="card-icon">⚠️</span>
-                        High Risk Users
+                        <span class="card-icon">
+                            <svg viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                                <line x1="12" y1="9" x2="12" y2="13"></line>
+                                <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                            </svg>
+                        </span>
+                        HIGH RISK USERS
                     </div>
                     <div class="card-value" id="high-risk-users">--</div>
                     <div class="card-description">Users with 3+ violations</div>
@@ -770,10 +1131,13 @@ async def root():
                 <div class="chart-card">
                     <div class="chart-header">
                         <h3 class="chart-title">
-                            <span>📈</span>
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                                <polyline points="17 6 23 6 23 12"></polyline>
+                            </svg>
                             Violation Trend
                         </h3>
-                        <div class="chart-badge">Last 30 Days</div>
+                        <div class="chart-badge">LAST 30 DAYS</div>
                     </div>
                     <div style="flex: 1; position: relative; max-height: 300px;">
                         <canvas id="trendChart"></canvas>
@@ -782,7 +1146,11 @@ async def root():
                 <div class="chart-card">
                     <div class="chart-header">
                         <h3 class="chart-title">
-                            <span>🎯</span>
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="6"></circle>
+                                <circle cx="12" cy="12" r="2"></circle>
+                            </svg>
                             Attack Types
                         </h3>
                     </div>
@@ -797,13 +1165,29 @@ async def root():
             <div class="table-container">
                 <div class="table-header">
                     <h3 class="table-title">
-                        <span>🔔</span>
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                        </svg>
                         Recent Incidents
                     </h3>
-                    <button onclick="loadDashboardData()" class="btn">
-                        <span>🔄</span>
-                        <span>Refresh</span>
-                    </button>
+                    <div style="display: flex; gap: 12px;">
+                        <a href="/incidents" class="btn" style="text-decoration: none;">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <span>View All</span>
+                        </a>
+                        <button onclick="loadDashboardData()" class="btn">
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                                <polyline points="23 4 23 10 17 10"></polyline>
+                                <polyline points="1 20 1 14 7 14"></polyline>
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                            </svg>
+                            <span>Refresh</span>
+                        </button>
+                    </div>
                 </div>
                 <div style="overflow-x: auto;">
                     <table>
@@ -1094,6 +1478,31 @@ async def root():
             // Manual refresh available via the "Refresh" button in the UI
             // Removed auto-refresh to prevent performance issues and excessive API calls
         </script>
+
+        <script>
+            // Sidebar toggle functionality
+            function toggleSidebar() {
+                const sidebar = document.getElementById('sidebar');
+                const mainWrapper = document.getElementById('mainWrapper');
+                sidebar.classList.toggle('collapsed');
+                mainWrapper.classList.toggle('sidebar-collapsed');
+
+                // Save state to localStorage
+                const isCollapsed = sidebar.classList.contains('collapsed');
+                localStorage.setItem('sidebarCollapsed', isCollapsed);
+            }
+
+            // Restore sidebar state on load
+            window.addEventListener('DOMContentLoaded', () => {
+                const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+                if (isCollapsed) {
+                    document.getElementById('sidebar').classList.add('collapsed');
+                    document.getElementById('mainWrapper').classList.add('sidebar-collapsed');
+                }
+            });
+        </script>
+        </div>
+        </div>
     </body>
     </html>
     """
@@ -1508,6 +1917,718 @@ async def health_check():
     </html>
     """)
 
+@app.get("/incidents", include_in_schema=False)
+async def incidents_overview(
+    db: Session = Depends(get_db),
+    search: str = "",
+    severity: str = "",
+    page: int = 1,
+    limit: int = 50
+):
+    """Incidents overview page with search, filter, and pagination"""
+    try:
+        from database import Offense
+        from sqlalchemy import or_, func
+
+        # Build query
+        query = db.query(Offense)
+
+        # Search filter (user email or incident title)
+        if search:
+            search_pattern = f"%{search}%"
+            query = query.filter(
+                or_(
+                    Offense.user_principal_name.ilike(search_pattern),
+                    Offense.incident_title.ilike(search_pattern)
+                )
+            )
+
+        # Severity filter
+        if severity:
+            if severity == "CRITICAL":
+                # Get users with 3+ violations
+                user_counts = db.query(
+                    Offense.user_principal_name,
+                    func.count(Offense.id).label('count')
+                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) >= 3).all()
+                critical_users = [u[0] for u in user_counts]
+                query = query.filter(Offense.user_principal_name.in_(critical_users))
+            elif severity == "HIGH":
+                user_counts = db.query(
+                    Offense.user_principal_name,
+                    func.count(Offense.id).label('count')
+                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) == 2).all()
+                high_users = [u[0] for u in user_counts]
+                query = query.filter(Offense.user_principal_name.in_(high_users))
+            elif severity == "MEDIUM":
+                user_counts = db.query(
+                    Offense.user_principal_name,
+                    func.count(Offense.id).label('count')
+                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) == 1).all()
+                medium_users = [u[0] for u in user_counts]
+                query = query.filter(Offense.user_principal_name.in_(medium_users))
+
+        # Get total count before pagination
+        total_incidents = query.count()
+
+        # Pagination
+        offset = (page - 1) * limit
+        incidents = query.order_by(Offense.timestamp.desc()).offset(offset).limit(limit).all()
+
+        # Calculate violation counts per user for risk levels
+        user_violation_counts = {}
+        for incident in incidents:
+            if incident.user_principal_name not in user_violation_counts:
+                count = db.query(func.count(Offense.id))\
+                    .filter(Offense.user_principal_name == incident.user_principal_name)\
+                    .scalar()
+                user_violation_counts[incident.user_principal_name] = count
+
+        # Calculate pagination info
+        total_pages = (total_incidents + limit - 1) // limit
+        has_prev = page > 1
+        has_next = page < total_pages
+
+        # Format incidents for display
+        def get_risk_level(count):
+            if count >= 3:
+                return {"level": "CRITICAL", "color": "#ef4444", "icon": "🔴"}
+            elif count == 2:
+                return {"level": "HIGH", "color": "#f59e0b", "icon": "🟠"}
+            else:
+                return {"level": "MEDIUM", "color": "#3b82f6", "icon": "🟡"}
+
+        def get_violation_type_badge(title):
+            title_lower = title.lower()
+            if 'ktp' in title_lower or '16 digit' in title_lower:
+                return '<span class="violation-badge ktp">KTP</span>'
+            elif 'npwp' in title_lower or 'tax' in title_lower:
+                return '<span class="violation-badge npwp">NPWP</span>'
+            elif 'employee' in title_lower or 'kary' in title_lower:
+                return '<span class="violation-badge empid">Employee ID</span>'
+            else:
+                return '<span class="violation-badge other">Sensitive Data</span>'
+
+        def format_time_ago(timestamp):
+            if not timestamp:
+                return "Unknown"
+            from datetime import datetime, timezone
+            now = datetime.now(timezone.utc)
+            if timestamp.tzinfo is None:
+                timestamp = timestamp.replace(tzinfo=timezone.utc)
+            diff = now - timestamp
+
+            if diff.days > 30:
+                months = diff.days // 30
+                return f"{months} month{'s' if months != 1 else ''} ago"
+            elif diff.days > 0:
+                return f"{diff.days} day{'s' if diff.days != 1 else ''} ago"
+            elif diff.seconds >= 3600:
+                hours = diff.seconds // 3600
+                return f"{hours} hour{'s' if hours != 1 else ''} ago"
+            elif diff.seconds >= 60:
+                minutes = diff.seconds // 60
+                return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+            else:
+                return "Just now"
+
+        incidents_html = ""
+        for inc in incidents:
+            violation_count = user_violation_counts.get(inc.user_principal_name, 1)
+            risk = get_risk_level(violation_count)
+            violation_badge = get_violation_type_badge(inc.incident_title)
+            time_ago = format_time_ago(inc.timestamp)
+
+            incidents_html += f'''
+            <tr onclick="window.location.href='/incident/{inc.id}'" style="cursor: pointer;">
+                <td>
+                    <a href="/incident/{inc.id}" style="color: #9ca3af; text-decoration: none;">
+                        #{inc.id}
+                    </a>
+                </td>
+                <td>{inc.user_principal_name}</td>
+                <td>{violation_badge}</td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">{risk['icon']}</span>
+                        <span style="color: {risk['color']}; font-weight: 600;">{risk['level']}</span>
+                        <span style="color: #6b7280;">({violation_count} violation{'s' if violation_count != 1 else ''})</span>
+                    </div>
+                </td>
+                <td>{time_ago}</td>
+            </tr>
+            '''
+
+        if not incidents_html:
+            incidents_html = '''
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 40px; color: #6b7280;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                    <div style="font-size: 18px;">No incidents found</div>
+                    <div style="font-size: 14px; margin-top: 8px;">Try adjusting your search or filters</div>
+                </td>
+            </tr>
+            '''
+
+        # Build pagination HTML
+        pagination_html = ""
+        if total_pages > 1:
+            pagination_html = '<div class="pagination">'
+
+            # Previous button
+            if has_prev:
+                prev_url = f"/incidents?search={search}&severity={severity}&page={page-1}&limit={limit}"
+                pagination_html += f'<a href="{prev_url}" class="page-btn">← Previous</a>'
+            else:
+                pagination_html += '<span class="page-btn disabled">← Previous</span>'
+
+            # Page numbers
+            start_page = max(1, page - 2)
+            end_page = min(total_pages, page + 2)
+
+            if start_page > 1:
+                pagination_html += f'<a href="/incidents?search={search}&severity={severity}&page=1&limit={limit}" class="page-num">1</a>'
+                if start_page > 2:
+                    pagination_html += '<span class="page-num disabled">...</span>'
+
+            for p in range(start_page, end_page + 1):
+                if p == page:
+                    pagination_html += f'<span class="page-num active">{p}</span>'
+                else:
+                    pagination_html += f'<a href="/incidents?search={search}&severity={severity}&page={p}&limit={limit}" class="page-num">{p}</a>'
+
+            if end_page < total_pages:
+                if end_page < total_pages - 1:
+                    pagination_html += '<span class="page-num disabled">...</span>'
+                pagination_html += f'<a href="/incidents?search={search}&severity={severity}&page={total_pages}&limit={limit}" class="page-num">{total_pages}</a>'
+
+            # Next button
+            if has_next:
+                next_url = f"/incidents?search={search}&severity={severity}&page={page+1}&limit={limit}"
+                pagination_html += f'<a href="{next_url}" class="page-btn">Next →</a>'
+            else:
+                pagination_html += '<span class="page-btn disabled">Next →</span>'
+
+            pagination_html += '</div>'
+
+        return HTMLResponse(f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>All Incidents - DLP Engine</title>
+            <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+            <style>
+                * {{
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }}
+
+                body {{
+                    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+                    background: #000000;
+                    color: #ffffff;
+                    min-height: 100vh;
+                    background: radial-gradient(circle at 20% 20%, rgba(156, 163, 175, 0.08) 0%, transparent 50%),
+                                radial-gradient(circle at 80% 80%, rgba(107, 114, 128, 0.08) 0%, transparent 50%),
+                                #000000;
+                }}
+
+                .container {{
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 40px 20px;
+                }}
+
+                .header {{
+                    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 50%, #4b5563 100%);
+                    padding: 40px;
+                    border-radius: 20px;
+                    margin-bottom: 30px;
+                    box-shadow: 0 8px 32px rgba(156, 163, 175, 0.2);
+                }}
+
+                .header h1 {{
+                    font-size: 32px;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                }}
+
+                .header p {{
+                    opacity: 0.9;
+                    font-size: 16px;
+                }}
+
+                .stats-bar {{
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                    gap: 20px;
+                    margin-bottom: 30px;
+                }}
+
+                .stat-card {{
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 16px;
+                    padding: 24px;
+                }}
+
+                .stat-label {{
+                    color: #9ca3af;
+                    font-size: 14px;
+                    margin-bottom: 8px;
+                }}
+
+                .stat-value {{
+                    font-size: 32px;
+                    font-weight: 700;
+                    color: #ffffff;
+                }}
+
+                .controls {{
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 16px;
+                    padding: 24px;
+                    margin-bottom: 24px;
+                }}
+
+                .controls-grid {{
+                    display: grid;
+                    grid-template-columns: 1fr auto auto auto;
+                    gap: 16px;
+                    align-items: end;
+                }}
+
+                .control-group {{
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                }}
+
+                .control-group label {{
+                    color: #9ca3af;
+                    font-size: 14px;
+                    font-weight: 500;
+                }}
+
+                .control-group input,
+                .control-group select {{
+                    padding: 12px 16px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 8px;
+                    color: #ffffff;
+                    font-size: 14px;
+                }}
+
+                .control-group select option {{
+                    background: #1a1a1a;
+                    color: #ffffff;
+                    padding: 8px;
+                }}
+
+                .control-group input:focus,
+                .control-group select:focus {{
+                    outline: none;
+                    border-color: #6b7280;
+                }}
+
+                /* Sidebar Navigation */
+                .sidebar {{
+                    position: fixed;
+                    left: 0;
+                    top: 0;
+                    width: 280px;
+                    height: 100vh;
+                    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+                    border-right: 1px solid rgba(255, 255, 255, 0.1);
+                    padding: 24px 0;
+                    overflow-y: auto;
+                    z-index: 1000;
+                }}
+
+                .sidebar-header {{
+                    padding: 0 24px 24px 24px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                }}
+
+                .sidebar-logo {{
+                    font-size: 24px;
+                    font-weight: 700;
+                    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
+                    -webkit-background-clip: text;
+                    -webkit-text-fill-color: transparent;
+                    background-clip: text;
+                }}
+
+                .sidebar-menu {{
+                    padding: 24px 12px;
+                }}
+
+                .menu-section {{
+                    margin-bottom: 32px;
+                }}
+
+                .menu-section-title {{
+                    padding: 0 12px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                    letter-spacing: 1px;
+                    color: #6b7280;
+                    margin-bottom: 12px;
+                }}
+
+                .menu-item {{
+                    display: flex;
+                    align-items: center;
+                    gap: 12px;
+                    padding: 12px 16px;
+                    margin: 4px 0;
+                    color: #9ca3af;
+                    text-decoration: none;
+                    border-radius: 8px;
+                    transition: all 0.2s;
+                    font-weight: 500;
+                }}
+
+                .menu-item:hover {{
+                    background: rgba(255, 255, 255, 0.05);
+                    color: #ffffff;
+                    transform: translateX(4px);
+                }}
+
+                .menu-item.active {{
+                    background: linear-gradient(135deg, rgba(156, 163, 175, 0.15) 0%, rgba(107, 114, 128, 0.15) 100%);
+                    color: #ffffff;
+                    border-left: 3px solid #6b7280;
+                }}
+
+                .menu-item-icon {{
+                    font-size: 20px;
+                    width: 24px;
+                    text-align: center;
+                }}
+
+                .menu-item-badge {{
+                    margin-left: auto;
+                    background: rgba(239, 68, 68, 0.2);
+                    color: #fca5a5;
+                    padding: 2px 8px;
+                    border-radius: 12px;
+                    font-size: 11px;
+                    font-weight: 600;
+                }}
+
+                .main-content {{
+                    margin-left: 280px;
+                    min-height: 100vh;
+                }}
+
+                @media (max-width: 768px) {{
+                    .sidebar {{
+                        width: 0;
+                        overflow: hidden;
+                    }}
+
+                    .main-content {{
+                        margin-left: 0;
+                    }}
+                }}
+
+                .btn {{
+                    padding: 12px 24px;
+                    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+                    border: none;
+                    border-radius: 8px;
+                    color: white;
+                    font-weight: 600;
+                    cursor: pointer;
+                    text-decoration: none;
+                    display: inline-block;
+                    transition: all 0.3s;
+                }}
+
+                .btn:hover {{
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.4);
+                }}
+
+                .btn-secondary {{
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                }}
+
+                .table-container {{
+                    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+                    backdrop-filter: blur(10px);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 16px;
+                    overflow: hidden;
+                }}
+
+                table {{
+                    width: 100%;
+                    border-collapse: collapse;
+                }}
+
+                thead {{
+                    background: rgba(255, 255, 255, 0.03);
+                }}
+
+                th {{
+                    padding: 16px;
+                    text-align: left;
+                    font-weight: 600;
+                    color: #9ca3af;
+                    font-size: 14px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                }}
+
+                td {{
+                    padding: 16px;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                    color: #e5e7eb;
+                }}
+
+                tbody tr {{
+                    transition: all 0.2s;
+                }}
+
+                tbody tr:hover {{
+                    background: rgba(255, 255, 255, 0.05);
+                }}
+
+                .violation-badge {{
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    display: inline-block;
+                }}
+
+                .violation-badge.ktp {{
+                    background: rgba(239, 68, 68, 0.2);
+                    color: #fca5a5;
+                    border: 1px solid rgba(239, 68, 68, 0.3);
+                }}
+
+                .violation-badge.npwp {{
+                    background: rgba(245, 158, 11, 0.2);
+                    color: #fcd34d;
+                    border: 1px solid rgba(245, 158, 11, 0.3);
+                }}
+
+                .violation-badge.empid {{
+                    background: rgba(59, 130, 246, 0.2);
+                    color: #93c5fd;
+                    border: 1px solid rgba(59, 130, 246, 0.3);
+                }}
+
+                .violation-badge.other {{
+                    background: rgba(107, 114, 128, 0.2);
+                    color: #d1d5db;
+                    border: 1px solid rgba(107, 114, 128, 0.3);
+                }}
+
+                .pagination {{
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    gap: 8px;
+                    margin-top: 24px;
+                    padding: 24px;
+                }}
+
+                .page-num,
+                .page-btn {{
+                    padding: 8px 16px;
+                    background: rgba(255, 255, 255, 0.05);
+                    border: 1px solid rgba(255, 255, 255, 0.1);
+                    border-radius: 8px;
+                    color: #ffffff;
+                    text-decoration: none;
+                    font-weight: 500;
+                    transition: all 0.2s;
+                }}
+
+                .page-num:hover,
+                .page-btn:hover {{
+                    background: rgba(255, 255, 255, 0.1);
+                }}
+
+                .page-num.active {{
+                    background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+                    border-color: #6b7280;
+                }}
+
+                .page-num.disabled,
+                .page-btn.disabled {{
+                    opacity: 0.3;
+                    cursor: not-allowed;
+                }}
+
+                .back-link {{
+                    margin-top: 24px;
+                    text-align: center;
+                }}
+
+                @media (max-width: 768px) {{
+                    .controls-grid {{
+                        grid-template-columns: 1fr;
+                    }}
+
+                    .stats-bar {{
+                        grid-template-columns: 1fr;
+                    }}
+                }}
+            </style>
+        </head>
+        <body>
+            <!-- Sidebar Navigation -->
+            <div class="sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-logo">🛡️ DLP Engine</div>
+                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">v2.0 Enterprise</div>
+                </div>
+
+                <div class="sidebar-menu">
+                    <div class="menu-section">
+                        <div class="menu-section-title">Overview</div>
+                        <a href="/" class="menu-item">
+                            <span class="menu-item-icon">📊</span>
+                            <span>Dashboard</span>
+                        </a>
+                        <a href="/incidents" class="menu-item active">
+                            <span class="menu-item-icon">🔍</span>
+                            <span>All Incidents</span>
+                        </a>
+                    </div>
+
+                    <div class="menu-section">
+                        <div class="menu-section-title">Monitoring</div>
+                        <a href="/health" class="menu-item">
+                            <span class="menu-item-icon">🏥</span>
+                            <span>System Health</span>
+                        </a>
+                        <a href="/redoc" class="menu-item">
+                            <span class="menu-item-icon">📖</span>
+                            <span>API Documentation</span>
+                        </a>
+                    </div>
+
+                    <div class="menu-section">
+                        <div class="menu-section-title">Resources</div>
+                        <a href="https://github.com/anthropics/claude-code" target="_blank" class="menu-item">
+                            <span class="menu-item-icon">📚</span>
+                            <span>Documentation</span>
+                        </a>
+                        <a href="https://portal.azure.com" target="_blank" class="menu-item">
+                            <span class="menu-item-icon">☁️</span>
+                            <span>Azure Portal</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content -->
+            <div class="main-content">
+            <div class="container">
+                <div class="header">
+                    <h1>🔍 All Incidents</h1>
+                    <p>Complete incident history and management</p>
+                </div>
+
+                <div class="stats-bar">
+                    <div class="stat-card">
+                        <div class="stat-label">Total Incidents</div>
+                        <div class="stat-value">{total_incidents}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Current Page</div>
+                        <div class="stat-value">{page} / {total_pages if total_pages > 0 else 1}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Showing</div>
+                        <div class="stat-value">{len(incidents)}</div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <form method="GET" action="/incidents">
+                        <div class="controls-grid">
+                            <div class="control-group">
+                                <label for="search">Search</label>
+                                <input
+                                    type="text"
+                                    id="search"
+                                    name="search"
+                                    placeholder="Search by user or incident title..."
+                                    value="{search}"
+                                >
+                            </div>
+
+                            <div class="control-group">
+                                <label for="severity">Risk Level</label>
+                                <select id="severity" name="severity">
+                                    <option value="" {'selected' if not severity else ''}>All Levels</option>
+                                    <option value="CRITICAL" {'selected' if severity == 'CRITICAL' else ''}>🔴 Critical (3+)</option>
+                                    <option value="HIGH" {'selected' if severity == 'HIGH' else ''}>🟠 High (2)</option>
+                                    <option value="MEDIUM" {'selected' if severity == 'MEDIUM' else ''}>🟡 Medium (1)</option>
+                                </select>
+                            </div>
+
+                            <div class="control-group">
+                                <label for="limit">Per Page</label>
+                                <select id="limit" name="limit">
+                                    <option value="25" {'selected' if limit == 25 else ''}>25</option>
+                                    <option value="50" {'selected' if limit == 50 else ''}>50</option>
+                                    <option value="100" {'selected' if limit == 100 else ''}>100</option>
+                                </select>
+                            </div>
+
+                            <button type="submit" class="btn">Apply Filters</button>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>User</th>
+                                <th>Violation Type</th>
+                                <th>Risk Level</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {incidents_html}
+                        </tbody>
+                    </table>
+                    {pagination_html}
+                </div>
+
+            </div>
+            </div>
+        </body>
+        </html>
+        """)
+
+    except Exception as e:
+        logger.error(f"Error in incidents overview: {e}")
+        import traceback
+        traceback.print_exc()
+        return HTMLResponse(f"<h1>Error loading incidents</h1><p>{str(e)}</p>", status_code=500)
+
 @app.get("/incident/{incident_id}", include_in_schema=False)
 async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
     """Incident detail page with admin actions"""
@@ -1726,10 +2847,16 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
             <div class="container">
                 <div class="header">
                     <h1>🔍 Incident #{incident.id}</h1>
-                    <a href="/" class="back-btn">
-                        <span>←</span>
-                        <span>Back to Dashboard</span>
-                    </a>
+                    <div style="display: flex; gap: 12px;">
+                        <a href="/incidents" class="back-btn">
+                            <span>←</span>
+                            <span>All Incidents</span>
+                        </a>
+                        <a href="/" class="back-btn" style="background: rgba(255, 255, 255, 0.05);">
+                            <span>🏠</span>
+                            <span>Dashboard</span>
+                        </a>
+                    </div>
                 </div>
 
                 <div id="success-message" class="success-msg"></div>
@@ -2155,6 +3282,154 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
     except Exception as e:
         logger.error(f"Error handling incident action: {e}")
         return JSONResponse({"detail": str(e)}, status_code=500)
+
+@app.post("/api/remediate")
+async def sentinel_remediate(request: dict):
+    """
+    Remediation endpoint for Sentinel playbook integration
+
+    Accepts remediation requests from Microsoft Sentinel and executes
+    appropriate actions (revoke sessions, block account, send notifications)
+    """
+    try:
+        user_email = request.get("userPrincipalName")
+        incident_id_str = request.get("incidentId", "Unknown")
+        incident_title = request.get("incidentTitle", "Sentinel Incident")
+        severity = request.get("severity", "High")
+        actions = request.get("actions", [])
+        source = request.get("source", "sentinel")
+
+        logger.info(f"📨 Remediation request from {source} for user: {user_email}")
+        logger.info(f"   Incident: {incident_id_str} | Severity: {severity}")
+        logger.info(f"   Actions requested: {actions}")
+
+        if not user_email:
+            return JSONResponse(
+                {"ok": False, "message": "Missing userPrincipalName"},
+                status_code=400
+            )
+
+        results = {
+            "ok": True,
+            "blocked": False,
+            "sessions_revoked": False,
+            "message": "",
+            "details": []
+        }
+
+        # Execute requested actions
+        if "blockUser" in actions and EMAIL_ENABLED:
+            try:
+                block_result = await email_service.block_user_account(user_email, block=True)
+                results["blocked"] = block_result["ok"]
+                results["details"].append({
+                    "action": "blockUser",
+                    "status": block_result["ok"],
+                    "message": block_result["message"]
+                })
+
+                if not block_result["ok"]:
+                    results["ok"] = False
+                    logger.error(f"   ❌ Failed to block user: {block_result['message']}")
+                else:
+                    logger.info(f"   ✅ User account blocked successfully")
+            except Exception as e:
+                results["ok"] = False
+                results["details"].append({
+                    "action": "blockUser",
+                    "status": False,
+                    "message": str(e)
+                })
+                logger.error(f"   ❌ Exception blocking user: {e}")
+
+        if "revokeSessions" in actions and EMAIL_ENABLED:
+            try:
+                sessions_result = await email_service.revoke_user_sessions(user_email)
+                results["sessions_revoked"] = sessions_result["ok"]
+                results["details"].append({
+                    "action": "revokeSessions",
+                    "status": sessions_result["ok"],
+                    "message": sessions_result["message"]
+                })
+
+                if not sessions_result["ok"]:
+                    results["ok"] = False
+                    logger.error(f"   ❌ Failed to revoke sessions: {sessions_result['message']}")
+                else:
+                    logger.info(f"   ✅ User sessions revoked successfully")
+            except Exception as e:
+                results["ok"] = False
+                results["details"].append({
+                    "action": "revokeSessions",
+                    "status": False,
+                    "message": str(e)
+                })
+                logger.error(f"   ❌ Exception revoking sessions: {e}")
+
+        # Build summary message
+        if results["ok"]:
+            results["message"] = f"Full remediation completed for {user_email}"
+        elif results["blocked"] or results["sessions_revoked"]:
+            results["message"] = f"Partial remediation: Blocked={results['blocked']}, SessionsRevoked={results['sessions_revoked']}"
+        else:
+            results["message"] = f"Remediation failed for {user_email}"
+
+        # Send notification email to user
+        if EMAIL_ENABLED and (results["blocked"] or results["sessions_revoked"]):
+            try:
+                notification_subject = "🚫 URGENT: Account Access Suspended - Security Violation"
+                notification_body = f"""
+                <html>
+                <body style="font-family: Arial, sans-serif;">
+                    <h2 style="color: #dc2626;">Account Access Suspended</h2>
+                    <p>Your account has been suspended due to security policy violations detected by our automated monitoring system.</p>
+
+                    <div style="background: #fee; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+                        <p><strong>Actions Taken:</strong></p>
+                        <ul>
+                            {"<li>✅ Account disabled</li>" if results["blocked"] else ""}
+                            {"<li>✅ All active sessions terminated</li>" if results["sessions_revoked"] else ""}
+                        </ul>
+                    </div>
+
+                    <p><strong>Incident Details:</strong></p>
+                    <ul>
+                        <li>Incident ID: {incident_id_str}</li>
+                        <li>Severity: {severity}</li>
+                        <li>Title: {incident_title}</li>
+                        <li>Timestamp: {datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+                    </ul>
+
+                    <p><strong>Next Steps:</strong></p>
+                    <ol>
+                        <li>Contact IT Security immediately</li>
+                        <li>Do NOT attempt to access systems using alternate methods</li>
+                        <li>Complete mandatory security training before reinstatement</li>
+                    </ol>
+
+                    <p style="color: #666; font-size: 12px;">This is an automated message from the DLP Remediation System. For assistance, contact your IT Security team.</p>
+                </body>
+                </html>
+                """
+
+                await email_service.send_email_via_graph(
+                    recipient=user_email,
+                    subject=notification_subject,
+                    html_body=notification_body
+                )
+                logger.info(f"   📧 Notification email sent to {user_email}")
+            except Exception as e:
+                logger.error(f"   ⚠️ Failed to send notification email: {e}")
+
+        logger.info(f"📊 Remediation summary: {results['message']}")
+        return JSONResponse(results)
+
+    except Exception as e:
+        logger.error(f"❌ Error in remediation endpoint: {e}")
+        return JSONResponse(
+            {"ok": False, "message": f"Remediation error: {str(e)}"},
+            status_code=500
+        )
 
 @app.post("/check-email", response_model=EmailCheckResponse)
 async def check_email(request: EmailCheckRequest, db: Session = Depends(get_db)):
