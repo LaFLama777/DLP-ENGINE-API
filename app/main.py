@@ -1853,13 +1853,21 @@ async def health_check():
                 box-shadow: 0 10px 30px rgba(107, 114, 128, 0.3);
                 transform: translateY(-2px);
             }}
+
+            {get_sidebar_css()}
         </style>
     </head>
     <body>
+        {get_professional_sidebar('health')}
+
+        <div class="main-wrapper" id="mainWrapper">
         <div class="container">
             <div class="card">
                 <div class="header">
-                    <h1>🏥 System Health</h1>
+                    <h1>
+                        {Icons.alert_triangle(32)}
+                        System Health
+                    </h1>
                     <p style="color: #9ca3af; font-size: 1rem;">DLP Remediation Engine v{settings.API_VERSION}</p>
                     <div class="status-badge">
                         <span>●</span>
@@ -1871,7 +1879,9 @@ async def health_check():
                     <div class="info-item">
                         <span class="info-label">Database</span>
                         <span class="info-value" style="color: {db_color};">
-                            <span>{db_icon}</span>
+                            <svg viewBox="0 0 24 24" width="20" height="20" stroke="{db_color}" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
+                                {"<circle cx='12' cy='12' r='10'></circle><path d='M9 12l2 2 4-4'></path>" if db_status == "healthy" else "<circle cx='12' cy='12' r='10'></circle><line x1='15' y1='9' x2='9' y2='15'></line><line x1='9' y1='9' x2='15' y2='15'></line>"}
+                            </svg>
                             <span>{db_status.upper()}</span>
                         </span>
                     </div>
@@ -1899,7 +1909,11 @@ async def health_check():
                 <div class="features-grid">
                     {''.join([f'''
                     <div class="feature-item">
-                        <span class="feature-icon">{'✅' if enabled else '❌'}</span>
+                        <span class="feature-icon">
+                            <svg viewBox="0 0 24 24" width="18" height="18" stroke="{'#22c55e' if enabled else '#ef4444'}" stroke-width="2" fill="none">
+                                {"<circle cx='12' cy='12' r='10'></circle><path d='M9 12l2 2 4-4'></path>" if enabled else "<circle cx='12' cy='12' r='10'></circle><line x1='15' y1='9' x2='9' y2='15'></line><line x1='9' y1='9' x2='15' y2='15'></line>"}
+                            </svg>
+                        </span>
                         <span class="feature-name">{name}</span>
                     </div>
                     ''' for name, enabled in features.items()])}
@@ -1907,12 +1921,15 @@ async def health_check():
 
                 <div style="text-align: center;">
                     <a href="/" class="btn">
-                        <span>🏠</span>
+                        {Icons.shield(16)}
                         <span>Back to Dashboard</span>
                     </a>
                 </div>
             </div>
         </div>
+        </div>
+
+        {get_sidebar_javascript()}
     </body>
     </html>
     """)
@@ -2063,7 +2080,12 @@ async def incidents_overview(
             incidents_html = '''
             <tr>
                 <td colspan="5" style="text-align: center; padding: 40px; color: #6b7280;">
-                    <div style="font-size: 48px; margin-bottom: 16px;">📭</div>
+                    <div style="margin-bottom: 16px;">
+                        <svg viewBox="0 0 24 24" width="48" height="48" stroke="#6b7280" stroke-width="2" fill="none" style="display: inline-block;">
+                            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                            <circle cx="12" cy="7" r="4"></circle>
+                        </svg>
+                    </div>
                     <div style="font-size: 18px;">No incidents found</div>
                     <div style="font-size: 14px; margin-top: 8px;">Try adjusting your search or filters</div>
                 </td>
@@ -2238,51 +2260,7 @@ async def incidents_overview(
                     border-color: #6b7280;
                 }}
 
-                /* Sidebar Navigation */
-                .sidebar {{
-                    position: fixed;
-                    left: 0;
-                    top: 0;
-                    width: 280px;
-                    height: 100vh;
-                    background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
-                    border-right: 1px solid rgba(255, 255, 255, 0.1);
-                    padding: 24px 0;
-                    overflow-y: auto;
-                    z-index: 1000;
-                }}
-
-                .sidebar-header {{
-                    padding: 0 24px 24px 24px;
-                    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-                }}
-
-                .sidebar-logo {{
-                    font-size: 24px;
-                    font-weight: 700;
-                    background: linear-gradient(135deg, #9ca3af 0%, #6b7280 100%);
-                    -webkit-background-clip: text;
-                    -webkit-text-fill-color: transparent;
-                    background-clip: text;
-                }}
-
-                .sidebar-menu {{
-                    padding: 24px 12px;
-                }}
-
-                .menu-section {{
-                    margin-bottom: 32px;
-                }}
-
-                .menu-section-title {{
-                    padding: 0 12px;
-                    font-size: 11px;
-                    font-weight: 600;
-                    text-transform: uppercase;
-                    letter-spacing: 1px;
-                    color: #6b7280;
-                    margin-bottom: 12px;
-                }}
+                {get_sidebar_css()}
 
                 .menu-item {{
                     display: flex;
@@ -2492,57 +2470,16 @@ async def incidents_overview(
             </style>
         </head>
         <body>
-            <!-- Sidebar Navigation -->
-            <div class="sidebar">
-                <div class="sidebar-header">
-                    <div class="sidebar-logo">🛡️ DLP Engine</div>
-                    <div style="font-size: 12px; color: #6b7280; margin-top: 4px;">v2.0 Enterprise</div>
-                </div>
-
-                <div class="sidebar-menu">
-                    <div class="menu-section">
-                        <div class="menu-section-title">Overview</div>
-                        <a href="/" class="menu-item">
-                            <span class="menu-item-icon">📊</span>
-                            <span>Dashboard</span>
-                        </a>
-                        <a href="/incidents" class="menu-item active">
-                            <span class="menu-item-icon">🔍</span>
-                            <span>All Incidents</span>
-                        </a>
-                    </div>
-
-                    <div class="menu-section">
-                        <div class="menu-section-title">Monitoring</div>
-                        <a href="/health" class="menu-item">
-                            <span class="menu-item-icon">🏥</span>
-                            <span>System Health</span>
-                        </a>
-                        <a href="/redoc" class="menu-item">
-                            <span class="menu-item-icon">📖</span>
-                            <span>API Documentation</span>
-                        </a>
-                    </div>
-
-                    <div class="menu-section">
-                        <div class="menu-section-title">Resources</div>
-                        <a href="https://github.com/anthropics/claude-code" target="_blank" class="menu-item">
-                            <span class="menu-item-icon">📚</span>
-                            <span>Documentation</span>
-                        </a>
-                        <a href="https://portal.azure.com" target="_blank" class="menu-item">
-                            <span class="menu-item-icon">☁️</span>
-                            <span>Azure Portal</span>
-                        </a>
-                    </div>
-                </div>
-            </div>
+            {get_professional_sidebar('incidents')}
 
             <!-- Main Content -->
-            <div class="main-content">
+            <div class="main-wrapper" id="mainWrapper">
             <div class="container">
                 <div class="header">
-                    <h1>🔍 All Incidents</h1>
+                    <h1>
+                        {Icons.search(32)}
+                        All Incidents
+                    </h1>
                     <p>Complete incident history and management</p>
                 </div>
 
@@ -2579,9 +2516,9 @@ async def incidents_overview(
                                 <label for="severity">Risk Level</label>
                                 <select id="severity" name="severity">
                                     <option value="" {'selected' if not severity else ''}>All Levels</option>
-                                    <option value="CRITICAL" {'selected' if severity == 'CRITICAL' else ''}>🔴 Critical (3+)</option>
-                                    <option value="HIGH" {'selected' if severity == 'HIGH' else ''}>🟠 High (2)</option>
-                                    <option value="MEDIUM" {'selected' if severity == 'MEDIUM' else ''}>🟡 Medium (1)</option>
+                                    <option value="CRITICAL" {'selected' if severity == 'CRITICAL' else ''}>● Critical (3+)</option>
+                                    <option value="HIGH" {'selected' if severity == 'HIGH' else ''}>● High (2)</option>
+                                    <option value="MEDIUM" {'selected' if severity == 'MEDIUM' else ''}>● Medium (1)</option>
                                 </select>
                             </div>
 
@@ -2619,6 +2556,9 @@ async def incidents_overview(
 
             </div>
             </div>
+            </div>
+
+            {get_sidebar_javascript()}
         </body>
         </html>
         """)
@@ -2841,19 +2781,30 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
                     border: 1px solid rgba(239, 68, 68, 0.3);
                     color: #ef4444;
                 }}
+
+                {get_sidebar_css()}
             </style>
         </head>
         <body>
+            {get_professional_sidebar('incidents')}
+
+            <div class="main-wrapper" id="mainWrapper">
             <div class="container">
                 <div class="header">
-                    <h1>🔍 Incident #{incident.id}</h1>
+                    <h1>
+                        {Icons.search(28)}
+                        Incident #{incident.id}
+                    </h1>
                     <div style="display: flex; gap: 12px;">
                         <a href="/incidents" class="back-btn">
-                            <span>←</span>
+                            <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none">
+                                <line x1="19" y1="12" x2="5" y2="12"></line>
+                                <polyline points="12 19 5 12 12 5"></polyline>
+                            </svg>
                             <span>All Incidents</span>
                         </a>
                         <a href="/" class="back-btn" style="background: rgba(255, 255, 255, 0.05);">
-                            <span>🏠</span>
+                            {Icons.shield(16)}
                             <span>Dashboard</span>
                         </a>
                     </div>
@@ -2863,7 +2814,15 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
                 <div id="error-message" class="error-msg"></div>
 
                 <div class="card">
-                    <h2 class="section-title">📋 Incident Details</h2>
+                    <h2 class="section-title">
+                        <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="16" y1="13" x2="8" y2="13"></line>
+                            <line x1="16" y1="17" x2="8" y2="17"></line>
+                        </svg>
+                        Incident Details
+                    </h2>
                     <div class="info-grid">
                         <div class="info-item">
                             <div class="info-label">Incident ID</div>
@@ -2985,6 +2944,10 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
                     }}
                 }}
             </script>
+            </div>
+            </div>
+
+            {get_sidebar_javascript()}
         </body>
         </html>
         """)
