@@ -1,7 +1,7 @@
 """
 Professional UI Components for DLP Engine
 
-This module provides reusable UI components with professional SVG icons
+This module provides reusable UI components with SVG icons
 and consistent styling across all pages.
 """
 
@@ -449,4 +449,89 @@ class Icons:
             <polyline points="23 4 23 10 17 10"></polyline>
             <polyline points="1 20 1 14 7 14"></polyline>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+        </svg>'''
+
+    @staticmethod
+    def rocket(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"></path>
+            <path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"></path>
+            <path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"></path>
+            <path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"></path>
+        </svg>'''
+
+    @staticmethod
+    def mail(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+            <polyline points="22,6 12,13 2,6"></polyline>
+        </svg>'''
+
+    @staticmethod
+    def lock(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+        </svg>'''
+
+    @staticmethod
+    def unlock(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 9.9-1"></path>
+        </svg>'''
+
+    @staticmethod
+    def check_circle(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+        </svg>'''
+
+    @staticmethod
+    def x_circle(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+        </svg>'''
+
+    @staticmethod
+    def info(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="12" y1="16" x2="12" y2="12"></line>
+            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>'''
+
+    @staticmethod
+    def user(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+        </svg>'''
+
+    @staticmethod
+    def clock(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <circle cx="12" cy="12" r="10"></circle>
+            <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>'''
+
+    @staticmethod
+    def bar_chart(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <line x1="12" y1="20" x2="12" y2="10"></line>
+            <line x1="18" y1="20" x2="18" y2="4"></line>
+            <line x1="6" y1="20" x2="6" y2="16"></line>
+        </svg>'''
+
+    @staticmethod
+    def file_text(size: int = 24) -> str:
+        return f'''<svg viewBox="0 0 24 24" width="{size}" height="{size}" stroke="currentColor" stroke-width="2" fill="none">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+            <polyline points="14 2 14 8 20 8"></polyline>
+            <line x1="16" y1="13" x2="8" y2="13"></line>
+            <line x1="16" y1="17" x2="8" y2="17"></line>
+            <polyline points="10 9 9 9 8 9"></polyline>
         </svg>'''
