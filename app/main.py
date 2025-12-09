@@ -3244,7 +3244,7 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
         return JSONResponse({"detail": str(e)}, status_code=500)
 
 @app.post("/api/remediate")
-async def sentinel_remediate(request: dict):
+async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
     """
     Remediation endpoint for Sentinel playbook integration
 
@@ -3269,12 +3269,26 @@ async def sentinel_remediate(request: dict):
                 status_code=400
             )
 
+        # Log to database for dashboard visibility
+        try:
+            offense, violation_count = log_offense_and_get_count(
+                db,
+                user_email,
+                f"Sentinel Alert: {incident_title}",
+                incident_id=str(incident_id_str)
+            )
+            logger.info(f"   📊 Logged to database - Violation count: {violation_count}")
+        except Exception as db_error:
+            logger.error(f"   ⚠️ Database logging failed (continuing anyway): {db_error}")
+            violation_count = 1
+
         results = {
             "ok": True,
             "blocked": False,
             "sessions_revoked": False,
             "message": "",
-            "details": []
+            "details": [],
+            "violation_count": violation_count
         }
 
         # Execute requested actions
