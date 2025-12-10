@@ -335,12 +335,12 @@ if __name__ == "__main__":
     test_cache = InMemoryCache[str](ttl_minutes=1, max_size=3)
     test_cache.set("key1", "value1")
     result = test_cache.get("key1")
-    print(f"   ✅ Set and retrieved: {result}")
+    print(f"   [OK] Set and retrieved: {result}")
 
     # Test 2: Cache miss
     print("\n2. Testing cache miss...")
     result = test_cache.get("nonexistent")
-    print(f"   ✅ Cache miss returns None: {result is None}")
+    print(f"   [OK] Cache miss returns None: {result is None}")
 
     # Test 3: Expiration
     print("\n3. Testing expiration (TTL=1 second)...")
@@ -349,7 +349,7 @@ if __name__ == "__main__":
     print(f"   Immediate get: {short_cache.get('temp')}")
     time.sleep(2)
     print(f"   After 2 seconds: {short_cache.get('temp')}")
-    print("   ✅ Entry expired correctly")
+    print("   [OK] Entry expired correctly")
 
     # Test 4: Size limit
     print("\n4. Testing size limit (max=3)...")
@@ -358,7 +358,7 @@ if __name__ == "__main__":
     test_cache.set("key3", "value3")
     test_cache.set("key4", "value4")  # Should evict oldest
     print(f"   Keys in cache: {test_cache.get_keys()}")
-    print(f"   ✅ Evicted oldest when limit reached")
+    print(f"   [OK] Evicted oldest when limit reached")
 
     # Test 5: Statistics
     print("\n5. Testing statistics...")
@@ -366,17 +366,17 @@ if __name__ == "__main__":
     print(f"   Hits: {stats['hits']}")
     print(f"   Misses: {stats['misses']}")
     print(f"   Hit Rate: {stats['hit_rate_percent']}%")
-    print(f"   ✅ Stats tracked correctly")
+    print(f"   [OK] Stats tracked correctly")
 
     # Test 6: Global caches
     print("\n6. Testing global caches...")
     user_cache.set("user@example.com", {"name": "Test User"})
     cached_user = user_cache.get("user@example.com")
-    print(f"   ✅ User cache: {cached_user}")
+    print(f"   [OK] User cache: {cached_user}")
 
     all_stats = get_cache_stats()
     print(f"   Total caches: {len(all_stats)}")
 
     print("\n" + "="*60)
-    print("✅ All cache tests passed!")
+    print("[OK] All cache tests passed!")
     print("="*60)

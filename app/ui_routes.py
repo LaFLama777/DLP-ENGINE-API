@@ -329,18 +329,18 @@ async def dashboard(db: Session = Depends(get_db)):
             </div>
             '''
     else:
-        recent_html = '<div class="empty-state">📋<p>No incidents recorded yet</p></div>'
+        recent_html = '<div class="empty-state"><p>No incidents recorded yet</p></div>'
     
     html = get_base_html_head("Dashboard")
     html += f"""
     <body>
         <div class="sidebar">
-            <div class="logo"><h1>🛡️ DLP Engine</h1></div>
-            <a href="/" class="nav-item active">📊 Dashboard</a>
-            <a href="/ui/incidents" class="nav-item">🚨 Incidents</a>
-            <a href="/ui/users" class="nav-item">👥 Users</a>
-            <a href="/ui/health" class="nav-item">❤️ Health Check</a>
-            <a href="/ui/stats" class="nav-item">📈 Statistics</a>
+            <div class="logo"><h1>DLP Engine</h1></div>
+            <a href="/" class="nav-item active">Dashboard</a>
+            <a href="/ui/incidents" class="nav-item">Incidents</a>
+            <a href="/ui/users" class="nav-item">Users</a>
+            <a href="/ui/health" class="nav-item">Health Check</a>
+            <a href="/ui/stats" class="nav-item">Statistics</a>
         </div>
         
         <div class="main-content">
@@ -567,12 +567,12 @@ async def incidents_page(
     html += f"""
     <body>
         <div class="sidebar">
-            <div class="logo"><h1>🛡️ DLP Engine</h1></div>
-            <a href="/" class="nav-item">📊 Dashboard</a>
-            <a href="/ui/incidents" class="nav-item active">🚨 Incidents</a>
-            <a href="/ui/users" class="nav-item">👥 Users</a>
-            <a href="/ui/health" class="nav-item">❤️ Health Check</a>
-            <a href="/ui/stats" class="nav-item">📈 Statistics</a>
+            <div class="logo"><h1>DLP Engine</h1></div>
+            <a href="/" class="nav-item">Dashboard</a>
+            <a href="/ui/incidents" class="nav-item active">Incidents</a>
+            <a href="/ui/users" class="nav-item">Users</a>
+            <a href="/ui/health" class="nav-item">Health Check</a>
+            <a href="/ui/stats" class="nav-item">Statistics</a>
         </div>
         
         <div class="main-content">
@@ -582,7 +582,7 @@ async def incidents_page(
             </div>
             
             <div class="filter-bar">
-                <input type="text" placeholder="🔍 Search by user or incident..." value="{search or ''}" 
+                <input type="text" placeholder="Search by user or incident..." value="{search or ''}" 
                        onkeypress="if(event.key==='Enter') window.location.href='/ui/incidents?search='+this.value" 
                        style="flex: 1;">
                 <select onchange="window.location.href='/ui/incidents?per_page='+this.value{f'&search={search}' if search else ''}'" 
@@ -640,7 +640,7 @@ async def users_page(db: Session = Depends(get_db)):
     rows_html = ""
     if user_stats:
         for stat in user_stats:
-            risk_level = "🚨 Critical" if stat.violation_count >= 3 else ("⚠️ High" if stat.violation_count >= 2 else "✅ Low")
+            risk_level = "Critical" if stat.violation_count >= 3 else ("High" if stat.violation_count >= 2 else "Low")
             risk_color = "#ef4444" if stat.violation_count >= 3 else ("#ffc107" if stat.violation_count >= 2 else "#10b981")
             last_violation_wib = (stat.last_violation + jakarta_tz).strftime("%Y-%m-%d %H:%M:%S")
             
@@ -659,12 +659,12 @@ async def users_page(db: Session = Depends(get_db)):
     html += f"""
     <body>
         <div class="sidebar">
-            <div class="logo"><h1>🛡️ DLP Engine</h1></div>
-            <a href="/" class="nav-item">📊 Dashboard</a>
-            <a href="/ui/incidents" class="nav-item">🚨 Incidents</a>
-            <a href="/ui/users" class="nav-item active">👥 Users</a>
-            <a href="/ui/health" class="nav-item">❤️ Health Check</a>
-            <a href="/ui/stats" class="nav-item">📈 Statistics</a>
+            <div class="logo"><h1>DLP Engine</h1></div>
+            <a href="/" class="nav-item">Dashboard</a>
+            <a href="/ui/incidents" class="nav-item">Incidents</a>
+            <a href="/ui/users" class="nav-item active">Users</a>
+            <a href="/ui/health" class="nav-item">Health Check</a>
+            <a href="/ui/stats" class="nav-item">Statistics</a>
         </div>
         
         <div class="main-content">
@@ -728,42 +728,42 @@ async def health_check_page():
     html += f"""
     <body>
         <div class="sidebar">
-            <div class="logo"><h1>🛡️ DLP Engine</h1></div>
-            <a href="/" class="nav-item">📊 Dashboard</a>
-            <a href="/ui/incidents" class="nav-item">🚨 Incidents</a>
-            <a href="/ui/users" class="nav-item">👥 Users</a>
+            <div class="logo"><h1>DLP Engine</h1></div>
+            <a href="/" class="nav-item">Dashboard</a>
+            <a href="/ui/incidents" class="nav-item">Incidents</a>
+            <a href="/ui/users" class="nav-item">Users</a>
             <a href="/ui/health" class="nav-item active">❤️ Health Check</a>
-            <a href="/ui/stats" class="nav-item">📈 Statistics</a>
+            <a href="/ui/stats" class="nav-item">Statistics</a>
         </div>
         
         <div class="main-content" style="display: flex; align-items: center; justify-content: center;">
             <div class="card" style="max-width: 800px; width: 100%;">
                 <div style="text-align: center; margin-bottom: 40px;">
-                    <div style="font-size: 72px; margin-bottom: 20px;">{'💚' if status == 'healthy' else '⚠️'}</div>
+                    <div style="font-size: 72px; margin-bottom: 20px;">{'' if status == 'healthy' else ''}</div>
                     <h1 style="font-size: 32px; font-weight: 700; color: {status_color}; margin-bottom: 10px;">{status.upper()}</h1>
                     <p style="color: #9ca3af; font-size: 16px;">DLP Remediation Engine v2.0.0</p>
                 </div>
                 
                 <div style="display: grid; gap: 16px;">
                     <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🗄️ Database</span>
+                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">Database</span>
                         <span style="color: {db_color}; font-size: 16px; font-weight: 600;">{db_icon} {db_status}</span>
                     </div>
                     <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">✉️ Email Notifications</span>
-                        <span style="font-size: 16px; font-weight: 600;">{'✅ Enabled' if email_enabled else '⚠️ Disabled'}</span>
+                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">Email Notifications</span>
+                        <span style="font-size: 16px; font-weight: 600;">{'Enabled' if email_enabled else 'Disabled'}</span>
                     </div>
                     <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">📢 Teams Alerts</span>
-                        <span style="font-size: 16px; font-weight: 600;">✅ Via Logic App</span>
+                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">Teams Alerts</span>
+                        <span style="font-size: 16px; font-weight: 600;">Via Logic App</span>
                     </div>
                     <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🔍 Sensitive Data Detection</span>
-                        <span style="font-size: 16px; font-weight: 600;">✅ Active</span>
+                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">Sensitive Data Detection</span>
+                        <span style="font-size: 16px; font-weight: 600;">Active</span>
                     </div>
                     <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🔒 Account Revocation</span>
-                        <span style="font-size: 16px; font-weight: 600;">✅ Active</span>
+                        <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">Account Revocation</span>
+                        <span style="font-size: 16px; font-weight: 600;">Active</span>
                     </div>
                     <div style="background: #000000; padding: 20px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
                         <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">🕐 Timestamp</span>
@@ -832,12 +832,12 @@ async def stats_page(db: Session = Depends(get_db)):
     html += f"""
     <body>
         <div class="sidebar">
-            <div class="logo"><h1>🛡️ DLP Engine</h1></div>
-            <a href="/" class="nav-item">📊 Dashboard</a>
-            <a href="/ui/incidents" class="nav-item">🚨 Incidents</a>
-            <a href="/ui/users" class="nav-item">👥 Users</a>
-            <a href="/ui/health" class="nav-item">❤️ Health Check</a>
-            <a href="/ui/stats" class="nav-item active">📈 Statistics</a>
+            <div class="logo"><h1>DLP Engine</h1></div>
+            <a href="/" class="nav-item">Dashboard</a>
+            <a href="/ui/incidents" class="nav-item">Incidents</a>
+            <a href="/ui/users" class="nav-item">Users</a>
+            <a href="/ui/health" class="nav-item">Health Check</a>
+            <a href="/ui/stats" class="nav-item active">Statistics</a>
         </div>
         
         <div class="main-content">

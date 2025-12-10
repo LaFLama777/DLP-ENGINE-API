@@ -94,9 +94,9 @@ from app.decision_engine import (
 # ============================================================================
 try:
     create_db_and_tables()
-    logger.info("✓ Database initialized")
+    logger.info("[OK] Database initialized")
 except Exception as e:
-    logger.error(f"✗ Database initialization failed: {e}", exc_info=True)
+    logger.error(f"[ERROR] Database initialization failed: {e}", exc_info=True)
 
 # ============================================================================
 # STEP 4: CREATE FASTAPI APP WITH CONFIG
@@ -143,9 +143,9 @@ decision_engine = AdvancedDecisionEngine()
 EMAIL_ENABLED = settings.FEATURE_EMAIL_NOTIFICATIONS
 try:
     email_service = GraphEmailNotificationService()
-    logger.info("✅ Graph Email notifications enabled")
+    logger.info("[OK] Graph Email notifications enabled")
 except Exception as e:
-    logger.error(f"❌ Failed to initialize email service: {e}")
+    logger.error(f"[ERROR] Failed to initialize email service: {e}")
     EMAIL_ENABLED = False
 
 # ============================================================================
@@ -1206,11 +1206,11 @@ async def root():
             <!-- Call to Action -->
             <div class="cta-section">
                 <a href="/docs" class="btn">
-                    <span>📖</span>
+                    <span>LEARN</span>
                     <span>API Documentation</span>
                 </a>
                 <a href="/redoc" class="btn btn-secondary">
-                    <span>📚</span>
+                    <span>DOCS</span>
                     <span>ReDoc</span>
                 </a>
                 <a href="/health" class="btn btn-secondary">
@@ -1697,12 +1697,12 @@ async def health_check():
         db.execute(text("SELECT 1"))
         db.close()
         db_status = "healthy"
-        db_icon = "✅"
+        db_icon = "[OK]"
         db_color = "#22c55e"
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
         db_status = "unhealthy"
-        db_icon = "❌"
+        db_icon = "[ERROR]"
         db_color = "#ef4444"
 
     overall_status = "healthy" if db_status == "healthy" else "degraded"
@@ -2857,15 +2857,15 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
                     <h2 class="section-title">⚡ Admin Actions</h2>
                     <div class="actions">
                         <button class="action-btn btn-education" onclick="performAction('education')">
-                            <span>📚</span>
+                            <span>TRAINING</span>
                             <span>Send Education Material</span>
                         </button>
                         <button class="action-btn btn-warning" onclick="performAction('warning')">
-                            <span>⚠️</span>
+                            <span>WARNING</span>
                             <span>Send Warning Email</span>
                         </button>
                         <button class="action-btn btn-revoke" onclick="performAction('revoke')">
-                            <span>🚫</span>
+                            <span>BLOCKED</span>
                             <span>Revoke Account Access</span>
                         </button>
                     </div>
@@ -2926,16 +2926,16 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
                         const result = await response.json();
 
                         if (response.ok) {{
-                            successMsg.textContent = '✅ ' + result.message;
+                            successMsg.textContent = '[OK] ' + result.message;
                             successMsg.style.display = 'block';
                             window.scrollTo({{ top: 0, behavior: 'smooth' }});
                         }} else {{
-                            errorMsg.textContent = '❌ ' + (result.detail || 'Action failed');
+                            errorMsg.textContent = '[ERROR] ' + (result.detail || 'Action failed');
                             errorMsg.style.display = 'block';
                             window.scrollTo({{ top: 0, behavior: 'smooth' }});
                         }}
                     }} catch (error) {{
-                        errorMsg.textContent = '❌ Network error: ' + error.message;
+                        errorMsg.textContent = '[ERROR] Network error: ' + error.message;
                         errorMsg.style.display = 'block';
                         window.scrollTo({{ top: 0, behavior: 'smooth' }});
                     }}
@@ -3073,7 +3073,7 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
             body = f"""
             <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <h2 style="color: #3b82f6;">📚 Data Security Education</h2>
+                    <h2 style="color: #3b82f6;">Data Security Education</h2>
                     <p>Dear Team Member,</p>
                     <p>We've detected a potential data security incident related to your account. We want to help you understand best practices for protecting sensitive information.</p>
 
@@ -3107,11 +3107,11 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
         elif action == "warning":
             # Send warning email
             violation_count = db.query(Offense).filter(Offense.user_principal_name == user_email).count()
-            subject = "⚠️ Data Security Policy Violation Warning"
+            subject = "[WARNING] Data Security Policy Violation Warning"
             body = f"""
             <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <h2 style="color: #f59e0b;">⚠️ Official Warning: Data Security Policy Violation</h2>
+                    <h2 style="color: #f59e0b;">WARNING: Official Warning - Data Security Policy Violation</h2>
                     <p>Dear Team Member,</p>
                     <p><strong>This is a formal warning regarding a violation of company data security policies.</strong></p>
 
@@ -3152,11 +3152,11 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
         elif action == "revoke":
             # CRITICAL FIX: Send notification email FIRST before revoking
             # This ensures user can receive the email before their account is disabled
-            subject = "🚫 URGENT: Account Access Being Suspended - Data Security Violation"
+            subject = "[URGENT] Account Access Being Suspended - Data Security Violation"
             body = f"""
             <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <h2 style="color: #ef4444;">🚫 Account Access Suspension Notice</h2>
+                    <h2 style="color: #ef4444;">Account Access Suspension Notice</h2>
                     <p>Dear Team Member,</p>
                     <p><strong style="color: #dc2626;">Your account access is being suspended immediately due to critical data security policy violations.</strong></p>
 
@@ -3198,7 +3198,7 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
             email_sent = False
             if EMAIL_ENABLED:
                 try:
-                    logger.info(f"📧 Sending notification email BEFORE revoking access for {user_email}...")
+                    logger.info(f"[EMAIL] Sending notification email BEFORE revoking access for {user_email}...")
                     email_sent = await email_service.send_email_via_graph(
                         recipient=user_email,
                         subject=subject,
@@ -3206,33 +3206,33 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
                     )
 
                     if email_sent:
-                        logger.info(f"✅ Notification email sent successfully to {user_email}")
+                        logger.info(f"[OK] Notification email sent successfully to {user_email}")
 
                         # Wait 3 seconds to ensure email delivery before revoking
                         import asyncio
                         logger.info(f"⏳ Waiting 3 seconds to ensure email delivery...")
                         await asyncio.sleep(3)
-                        logger.info(f"✅ Email delivery window completed, proceeding with revocation...")
+                        logger.info(f"[OK] Email delivery window completed, proceeding with revocation...")
                     else:
-                        logger.warning(f"⚠️ Email send returned False, but continuing with revocation")
+                        logger.warning(f"[WARNING] Email send returned False, but continuing with revocation")
 
                 except Exception as e:
-                    logger.error(f"⚠️ Failed to send notification email (continuing with revocation): {e}")
+                    logger.error(f"[WARNING] Failed to send notification email (continuing with revocation): {e}")
 
             # Actually revoke user access via Microsoft Graph API AFTER email sent
             if EMAIL_ENABLED:
                 try:
-                    logger.info(f"🚨 Revoking access for user: {user_email}")
+                    logger.info(f"[CRITICAL] Revoking access for user: {user_email}")
                     revoke_result = await email_service.revoke_user_access(user_email)
 
                     if revoke_result["ok"]:
-                        logger.info(f"✅ Successfully revoked access for {user_email}: Account blocked={revoke_result['blocked']}, Sessions revoked={revoke_result['sessions_revoked']}")
+                        logger.info(f"[OK] Successfully revoked access for {user_email}: Account blocked={revoke_result['blocked']}, Sessions revoked={revoke_result['sessions_revoked']}")
                         message_text = f"Email sent, account DISABLED and sessions REVOKED for {user_email}"
                     else:
-                        logger.error(f"❌ Failed to revoke access for {user_email}: {revoke_result['message']}")
+                        logger.error(f"[ERROR] Failed to revoke access for {user_email}: {revoke_result['message']}")
                         message_text = f"Email sent, but revocation failed: {revoke_result['message']}"
                 except Exception as e:
-                    logger.error(f"❌ Exception during revocation for {user_email}: {e}")
+                    logger.error(f"[ERROR] Exception during revocation for {user_email}: {e}")
                     message_text = f"Email sent, but revocation error: {str(e)}"
             else:
                 logger.warning(f"REVOKE ACTION: User {user_email} - Incident #{incident_id} - Email service disabled, cannot revoke access")
@@ -3251,12 +3251,12 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
                 )
 
                 if success:
-                    logger.info(f"✅ Action '{action}' completed for user {user_email} - Incident #{incident_id}")
+                    logger.info(f"[OK] Action '{action}' completed for user {user_email} - Incident #{incident_id}")
                 else:
-                    logger.error(f"❌ Failed to send email for action '{action}' - Graph API returned false")
+                    logger.error(f"[ERROR] Failed to send email for action '{action}' - Graph API returned false")
                     return JSONResponse({"detail": "Action logged but email failed to send via Graph API"}, status_code=500)
             except Exception as e:
-                logger.error(f"❌ Failed to send email for action '{action}': {e}")
+                logger.error(f"[ERROR] Failed to send email for action '{action}': {e}")
                 return JSONResponse({"detail": f"Action logged but email failed: {str(e)}"}, status_code=500)
         elif not EMAIL_ENABLED and action in ["education", "warning"]:
             logger.info(f"Action '{action}' logged for user {user_email} (email service disabled)")
@@ -3272,8 +3272,6 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
 @app.post("/api/remediate")
 async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
     """
-    Remediation endpoint for Sentinel playbook integration
-
     Accepts remediation requests from Microsoft Sentinel and executes
     appropriate actions (revoke sessions, block account, send notifications)
     """
@@ -3302,9 +3300,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                 user_email,
                 f"Sentinel Alert: {incident_title}"
             )
-            logger.info(f"   📊 Logged to database - Violation count: {violation_count}")
+            logger.info(f"   Logged to database - Violation count: {violation_count}")
         except Exception as db_error:
-            logger.error(f"   ⚠️ Database logging failed (continuing anyway): {db_error}")
+            logger.error(f"    Database logging failed (continuing anyway): {db_error}")
             violation_count = 1
 
         results = {
@@ -3323,8 +3321,8 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
         if will_perform_remediation:
             try:
-                logger.info(f"   📧 Sending notification email BEFORE remediation actions...")
-                notification_subject = "🚫 URGENT: Account Access Will Be Suspended - Security Violation"
+                logger.info(f"   [EMAIL] Sending notification email BEFORE remediation actions...")
+                notification_subject = "[URGENT] Account Access Will Be Suspended - Security Violation"
                 notification_body = f"""
                 <html>
                 <body style="font-family: Arial, sans-serif;">
@@ -3334,8 +3332,8 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                     <div style="background: #fee; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
                         <p><strong>Actions Being Taken:</strong></p>
                         <ul>
-                            {"<li>🚫 Account will be disabled</li>" if "blockUser" in actions else ""}
-                            {"<li>🚫 All active sessions will be terminated</li>" if "revokeSessions" in actions else ""}
+                            {"<li>Account will be disabled</li>" if "blockUser" in actions else ""}
+                            {"<li>All active sessions will be terminated</li>" if "revokeSessions" in actions else ""}
                         </ul>
                     </div>
 
@@ -3368,18 +3366,18 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
                 if email_result:
                     results["email_sent"] = True
-                    logger.info(f"   ✅ Notification email sent successfully to {user_email}")
+                    logger.info(f"   [OK] Notification email sent successfully to {user_email}")
 
                     # Wait 3 seconds to ensure email delivery before blocking account
                     import asyncio
                     logger.info(f"   ⏳ Waiting 3 seconds to ensure email delivery...")
                     await asyncio.sleep(3)
-                    logger.info(f"   ✅ Email delivery window completed, proceeding with remediation actions...")
+                    logger.info(f"   [OK] Email delivery window completed, proceeding with remediation actions...")
                 else:
-                    logger.warning(f"   ⚠️ Email send returned False, but continuing with remediation")
+                    logger.warning(f"   [WARNING] Email send returned False, but continuing with remediation")
 
             except Exception as e:
-                logger.error(f"   ⚠️ Failed to send notification email (continuing with remediation): {e}")
+                logger.error(f"   [WARNING] Failed to send notification email (continuing with remediation): {e}")
                 results["details"].append({
                     "action": "emailNotification",
                     "status": False,
@@ -3389,7 +3387,7 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
         # Execute requested actions AFTER email has been sent
         if "blockUser" in actions and EMAIL_ENABLED:
             try:
-                logger.info(f"   🚨 Blocking user account...")
+                logger.info(f"   [CRITICAL] Blocking user account...")
                 block_result = await email_service.block_user_account(user_email, block=True)
                 results["blocked"] = block_result["ok"]
                 results["details"].append({
@@ -3400,9 +3398,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
                 if not block_result["ok"]:
                     results["ok"] = False
-                    logger.error(f"   ❌ Failed to block user: {block_result['message']}")
+                    logger.error(f"   [ERROR] Failed to block user: {block_result['message']}")
                 else:
-                    logger.info(f"   ✅ User account blocked successfully")
+                    logger.info(f"   [OK] User account blocked successfully")
             except Exception as e:
                 results["ok"] = False
                 results["details"].append({
@@ -3410,11 +3408,11 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                     "status": False,
                     "message": str(e)
                 })
-                logger.error(f"   ❌ Exception blocking user: {e}")
+                logger.error(f"   [ERROR] Exception blocking user: {e}")
 
         if "revokeSessions" in actions and EMAIL_ENABLED:
             try:
-                logger.info(f"   🚨 Revoking user sessions...")
+                logger.info(f"   [CRITICAL] Revoking user sessions...")
                 sessions_result = await email_service.revoke_user_sessions(user_email)
                 results["sessions_revoked"] = sessions_result["ok"]
                 results["details"].append({
@@ -3425,9 +3423,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
                 if not sessions_result["ok"]:
                     results["ok"] = False
-                    logger.error(f"   ❌ Failed to revoke sessions: {sessions_result['message']}")
+                    logger.error(f"   [ERROR] Failed to revoke sessions: {sessions_result['message']}")
                 else:
-                    logger.info(f"   ✅ User sessions revoked successfully")
+                    logger.info(f"   [OK] User sessions revoked successfully")
             except Exception as e:
                 results["ok"] = False
                 results["details"].append({
@@ -3435,7 +3433,7 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                     "status": False,
                     "message": str(e)
                 })
-                logger.error(f"   ❌ Exception revoking sessions: {e}")
+                logger.error(f"   [ERROR] Exception revoking sessions: {e}")
 
         # Build summary message
         if results["ok"]:
@@ -3445,11 +3443,11 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
         else:
             results["message"] = f"Remediation failed for {user_email}"
 
-        logger.info(f"📊 Remediation summary: {results['message']}")
+        logger.info(f"[INFO] Remediation summary: {results['message']}")
         return JSONResponse(results)
 
     except Exception as e:
-        logger.error(f"❌ Error in remediation endpoint: {e}")
+        logger.error(f"[ERROR] Error in remediation endpoint: {e}")
         return JSONResponse(
             {"ok": False, "message": f"Remediation error: {str(e)}"},
             status_code=500
@@ -3496,7 +3494,7 @@ async def check_email(request: EmailCheckRequest, db: Session = Depends(get_db))
                         violation_count=violation_count,
                         blocked_content_summary=SensitiveDataDetector.mask_sensitive_data(request.content[:200])
                     )
-                    logger.info(f"✓ Email notification sent to {request.sender}")
+                    logger.info(f"[OK] Email notification sent to {request.sender}")
                 except EmailSendException as e:
                     logger.error(f"Failed to send email: {e}")
 
@@ -3592,9 +3590,9 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
                     file_name=parsed_incident.get("file_name")
                 )
                 email_sent = result
-                logger.info(f"✅ Email notification sent: {email_sent}")
+                logger.info(f"[OK] Email notification sent: {email_sent}")
             except Exception as e:
-                logger.error(f"❌ Email notification failed: {e}", exc_info=True)
+                logger.error(f"[ERROR] Email notification failed: {e}", exc_info=True)
 
         # Send socialization email if threshold reached
         socialization_sent = False
@@ -3602,20 +3600,20 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
             try:
                 await email_service.send_socialization_invitation(user_upn, offense_count)
                 socialization_sent = True
-                logger.info(f"✓ Socialization email sent to {user_upn}")
+                logger.info(f"[OK] Socialization email sent to {user_upn}")
             except Exception as e:
                 logger.error(f"Failed to send socialization email: {e}")
 
         # Revoke account if threshold reached
         account_revoked = False
         if should_revoke and settings.FEATURE_ACCOUNT_REVOCATION:
-            logger.info(f"🚨 CRITICAL: User has {offense_count} violations - triggering account revocation")
+            logger.info(f"[CRITICAL] User has {offense_count} violations - triggering account revocation")
             try:
                 revoke_result = await perform_hard_block(user_upn)
                 account_revoked = revoke_result
-                logger.info(f"✅ Account revoked: {account_revoked}")
+                logger.info(f"[OK] Account revoked: {account_revoked}")
             except Exception as e:
-                logger.error(f"❌ Account revocation failed: {e}", exc_info=True)
+                logger.error(f"[ERROR] Account revocation failed: {e}", exc_info=True)
 
         # Send admin alert if high risk
         admin_notified = False
@@ -3630,7 +3628,7 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
                     file_name=parsed_incident.get("file_name")
                 )
                 admin_notified = True
-                logger.info(f"✓ Admin alert sent for {user_upn}")
+                logger.info(f"[OK] Admin alert sent for {user_upn}")
             except Exception as e:
                 logger.error(f"Failed to send admin alert: {e}")
 
@@ -3664,7 +3662,7 @@ async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
             message=f"Violation processed. User has {offense_count} total violations."
         )
 
-        logger.info(f"✓ Incident processed for {user_upn}: {offense_count} violations")
+        logger.info(f"[OK] Incident processed for {user_upn}: {offense_count} violations")
         return response
 
     except HTTPException:
@@ -3910,7 +3908,7 @@ try:
     app.include_router(ui_router)
     logger.info("✓ UI routes loaded")
 except ImportError as e:
-    logger.warning(f"⚠️ UI routes not loaded: {e}")
+    logger.warning(f"[WARNING] UI routes not loaded: {e}")
 
 # ============================================================================
 # STEP 12: STARTUP/SHUTDOWN EVENTS
@@ -3932,7 +3930,7 @@ async def startup():
     # Validate configuration
     warnings = settings.validate_config()
     if warnings:
-        logger.warning(f"⚠️ Configuration warnings ({len(warnings)}):")
+        logger.warning(f"[WARNING] Configuration warnings ({len(warnings)}):")
         for warning in warnings:
             logger.warning(f"  - {warning}")
 

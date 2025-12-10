@@ -242,7 +242,7 @@ if __name__ == "__main__":
 
     try:
         settings = get_settings()
-        print("\n✅ Configuration loaded successfully!\n")
+        print("\n[OK] Configuration loaded successfully!\n")
 
         print("Key Settings:")
         print(f"  - Environment: {'Production' if settings.is_production() else 'Development'}")
@@ -255,16 +255,16 @@ if __name__ == "__main__":
         # Check for warnings
         warnings = settings.validate_config()
         if warnings:
-            print(f"\n⚠️  Configuration Warnings ({len(warnings)}):")
+            print(f"\n[WARNING] Configuration Warnings ({len(warnings)}):")
             for warning in warnings:
                 print(f"  - {warning}")
         else:
-            print("\n✅ No configuration warnings")
+            print("\n[OK] No configuration warnings")
 
         print(f"\n{'='*60}")
 
     except Exception as e:
-        print(f"\n❌ Configuration Error: {e}")
+        print(f"\n[ERROR] Configuration Error: {e}")
         print("\nMake sure .env file exists with all required variables:")
         print("  - TENANT_ID")
         print("  - BOT_CLIENT_ID")

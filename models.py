@@ -403,9 +403,9 @@ if __name__ == "__main__":
             sender="user@example.com",
             content="Test email with KTP: 1234567890123456"
         )
-        print(f"   ✅ Valid request: {valid_request.sender}")
+        print(f"   [OK] Valid request: {valid_request.sender}")
     except Exception as e:
-        print(f"   ❌ Error: {e}")
+        print(f"   [ERROR] Error: {e}")
 
     # Test invalid email
     print("\n2. Testing invalid email...")
@@ -414,7 +414,7 @@ if __name__ == "__main__":
             sender="not-an-email",
             content="Test content"
         )
-        print("   ❌ Should have failed validation!")
+        print("   [ERROR] Should have failed validation!")
     except Exception as e:
         print(f"   ✅ Correctly rejected: {type(e).__name__}")
 

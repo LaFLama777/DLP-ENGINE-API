@@ -312,7 +312,7 @@ if __name__ == "__main__":
     logger.info("This is an INFO message")
     logger.warning("This is a WARNING message")
     logger.error("This is an ERROR message")
-    print("   ✅ All log levels tested")
+    print("   [OK] All log levels tested")
 
     # Test 2: JSON logging
     print("\n2. Testing JSON format...")
@@ -326,7 +326,7 @@ if __name__ == "__main__":
 
     logger = get_logger(__name__)
     logger.info("Testing JSON format", extra={"user": "test@example.com"})
-    print("   ✅ JSON log written to logs/test_json.log")
+    print("   [OK] JSON log written to logs/test_json.log")
 
     # Test 3: Log context
     print("\n3. Testing LogContext...")
@@ -335,16 +335,16 @@ if __name__ == "__main__":
     logger = get_logger(__name__)
     with LogContext(request_id="test-123", user="admin"):
         logger.info("Message with context")
-    print("   ✅ Context added to log")
+    print("   [OK] Context added to log")
 
     # Test 4: Check log file
     print("\n4. Checking log files...")
     if os.path.exists("logs/dlp_engine.log"):
         size = os.path.getsize("logs/dlp_engine.log")
-        print(f"   ✅ Log file created: {size} bytes")
+        print(f"   [OK] Log file created: {size} bytes")
     else:
-        print("   ⚠️  Log file not found (may not have been created yet)")
+        print("   [WARNING] Log file not found (may not have been created yet)")
 
     print("\n" + "="*60)
-    print("✅ Logging configuration tests completed!")
+    print("[OK] Logging configuration tests completed!")
     print("="*60)

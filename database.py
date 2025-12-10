@@ -39,7 +39,7 @@ if DATABASE_URL.startswith("sqlite"):
         DATABASE_URL,
         connect_args={"check_same_thread": False}
     )
-    logger.info("✓ Using SQLite database (local development)")
+    logger.info("[OK] Using SQLite database (local development)")
 else:
     engine = create_engine(
         DATABASE_URL,
@@ -47,7 +47,7 @@ else:
         pool_size=10,
         max_overflow=20
     )
-    logger.info("✓ Using PostgreSQL database (Supabase)")
+    logger.info("[OK] Using PostgreSQL database (Supabase)")
 
 
 # SQLAlchemy 2.0 declarative base
@@ -95,9 +95,9 @@ def create_db_and_tables() -> None:
     """
     try:
         Base.metadata.create_all(bind=engine)
-        logger.info("✓ Database tables initialized")
+        logger.info("[OK] Database tables initialized")
     except Exception as e:
-        logger.error(f"✗ Failed to create tables: {e}")
+        logger.error(f"[ERROR] Failed to create tables: {e}")
         raise
 
 def log_offense(db: Session, user_upn: str, title: str) -> Offense:
@@ -123,11 +123,11 @@ def log_offense(db: Session, user_upn: str, title: str) -> Offense:
         db.add(new_offense)
         db.commit()
         db.refresh(new_offense)
-        logger.info(f"✓ Offense logged for user: {user_upn}")
+        logger.info(f"[OK] Offense logged for user: {user_upn}")
         return new_offense
     except Exception as e:
         db.rollback()
-        logger.error(f"✗ Failed to log offense: {e}")
+        logger.error(f"[ERROR] Failed to log offense: {e}")
         raise
 
 def get_offense_count(db: Session, user_upn: str) -> int:
@@ -148,7 +148,7 @@ def get_offense_count(db: Session, user_upn: str) -> int:
         logger.info(f"User {user_upn} has {count} previous offense(s)")
         return count
     except Exception as e:
-        logger.error(f"✗ Failed to get offense count: {e}")
+        logger.error(f"[ERROR] Failed to get offense count: {e}")
         return 0
 
 def log_offense_and_get_count(db: Session, user_upn: str, title: str) -> Tuple[Offense, int]:
@@ -187,11 +187,11 @@ def log_offense_and_get_count(db: Session, user_upn: str, title: str) -> Tuple[O
             Offense.user_principal_name == user_upn
         ).count()
 
-        logger.info(f"✓ Offense logged for user: {user_upn} (total: {count})")
+        logger.info(f"[OK] Offense logged for user: {user_upn} (total: {count})")
         return new_offense, count
     except Exception as e:
         db.rollback()
-        logger.error(f"✗ Failed to log offense and get count: {e}")
+        logger.error(f"[ERROR] Failed to log offense and get count: {e}")
         raise
 
 def get_all_offenses(db: Session, limit: int = 100, offset: int = 0) -> List[Offense]:
@@ -212,7 +212,7 @@ def get_all_offenses(db: Session, limit: int = 100, offset: int = 0) -> List[Off
         ).limit(limit).offset(offset).all()
         return offenses
     except Exception as e:
-        logger.error(f"✗ Failed to fetch offenses: {e}")
+        logger.error(f"[ERROR] Failed to fetch offenses: {e}")
         return []
 
 def get_user_offense_history(db: Session, user_upn: str) -> List[Offense]:
@@ -232,7 +232,7 @@ def get_user_offense_history(db: Session, user_upn: str) -> List[Offense]:
         ).order_by(Offense.timestamp.desc()).all()
         return offenses
     except Exception as e:
-        logger.error(f"✗ Failed to fetch user offense history: {e}")
+        logger.error(f"[ERROR] Failed to fetch user offense history: {e}")
         return []
 
 def get_database_stats(db: Session) -> Dict[str, Any]:
@@ -263,7 +263,7 @@ def get_database_stats(db: Session) -> Dict[str, Any]:
             "latest_offense_time": latest_offense.timestamp if latest_offense else None
         }
     except Exception as e:
-        logger.error(f"✗ Failed to get database stats: {e}")
+        logger.error(f"[ERROR] Failed to get database stats: {e}")
         return {
             "total_offenses": 0,
             "unique_users": 0,

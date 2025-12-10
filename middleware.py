@@ -276,28 +276,28 @@ if __name__ == "__main__":
     print("\n1. Testing Request ID Middleware...")
     response = client.get("/test")
     assert "X-Request-ID" in response.headers
-    print(f"   ✅ Request ID: {response.headers['X-Request-ID']}")
+    print(f"   [OK] Request ID: {response.headers['X-Request-ID']}")
 
     # Test 2: Processing Time
     print("\n2. Testing Logging Middleware...")
     response = client.get("/test")
     assert "X-Process-Time" in response.headers
-    print(f"   ✅ Process Time: {response.headers['X-Process-Time']}s")
+    print(f"   [OK] Process Time: {response.headers['X-Process-Time']}s")
 
     # Test 3: Security Headers
     print("\n3. Testing Security Headers Middleware...")
     response = client.get("/test")
     assert "X-Content-Type-Options" in response.headers
     assert "X-Frame-Options" in response.headers
-    print(f"   ✅ Security headers: X-Content-Type-Options, X-Frame-Options")
+    print(f"   [OK] Security headers: X-Content-Type-Options, X-Frame-Options")
 
     # Test 4: Request in response
     print("\n4. Testing Request State...")
     response = client.get("/test")
     data = response.json()
     assert data["request_id"] is not None
-    print(f"   ✅ Request ID accessible in endpoint: {data['request_id']}")
+    print(f"   [OK] Request ID accessible in endpoint: {data['request_id']}")
 
     print("\n" + "="*60)
-    print("✅ All middleware tests passed!")
+    print("[OK] All middleware tests passed!")
     print("="*60)

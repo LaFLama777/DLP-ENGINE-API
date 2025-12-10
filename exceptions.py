@@ -452,7 +452,7 @@ if __name__ == "__main__":
             details={"upn": "test@example.com", "tenant": "abc123"}
         )
     except DLPEngineException as e:
-        print(f"   ✅ Caught: {e.__class__.__name__}")
+        print(f"   [OK] Caught: {e.__class__.__name__}")
         print(f"   Message: {e.message}")
         print(f"   Details: {e.details}")
 
@@ -468,7 +468,7 @@ if __name__ == "__main__":
                 original_exception=original
             )
     except DLPEngineException as e:
-        print(f"   ✅ Caught: {e.__class__.__name__}")
+        print(f"   [OK] Caught: {e.__class__.__name__}")
         print(f"   Original: {e.original_exception}")
 
     # Test 3: to_dict() method
@@ -478,7 +478,7 @@ if __name__ == "__main__":
         details={"host": "localhost", "port": 5432}
     )
     exc_dict = exc.to_dict()
-    print(f"   ✅ Serialized: {exc_dict}")
+    print(f"   [OK] Serialized: {exc_dict}")
 
     # Test 4: handle_exception helper
     print("\n4. Testing handle_exception helper...")
@@ -486,9 +486,9 @@ if __name__ == "__main__":
         raise ValueError("Invalid input")
     except Exception as e:
         wrapped = handle_exception(e, logger, {"field": "user_upn"})
-        print(f"   ✅ Wrapped as: {wrapped.__class__.__name__}")
+        print(f"   [OK] Wrapped as: {wrapped.__class__.__name__}")
         print(f"   Details: {wrapped.details}")
 
     print("\n" + "="*60)
-    print("✅ All exception tests passed!")
+    print("[OK] All exception tests passed!")
     print("="*60)

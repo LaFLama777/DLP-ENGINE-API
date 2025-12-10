@@ -49,7 +49,7 @@ class GraphEmailNotificationService:
 
         # Validate configuration
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
-            logger.error("❌ Missing Graph API credentials!")
+            logger.error("[ERROR] Missing Graph API credentials!")
             logger.error(f"   TENANT_ID: {'Set' if self.tenant_id else 'NOT SET'}")
             logger.error(f"   BOT_CLIENT_ID: {'Set' if self.client_id else 'NOT SET'}")
             logger.error(f"   BOT_CLIENT_SECRET: {'Set' if self.client_secret else 'NOT SET'}")
@@ -59,7 +59,7 @@ class GraphEmailNotificationService:
                 details={"configured_fields": [f for f in ["tenant_id", "client_id", "client_secret", "sender_email"] if getattr(self, f)]}
             )
         else:
-            logger.info("✅ Graph Email Service initialized")
+            logger.info("[OK] Graph Email Service initialized")
     
     def _get_graph_client(self) -> Optional[GraphServiceClient]:
         """Initialize Graph client with service principal authentication"""
@@ -71,7 +71,7 @@ class GraphEmailNotificationService:
             )
             return GraphServiceClient(credentials=credential)
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Graph client: {e}")
+            logger.error(f"[ERROR] Failed to initialize Graph client: {e}")
             raise EmailSendException(
                 "Failed to initialize Graph client",
                 details={"error": str(e)},
@@ -98,10 +98,10 @@ class GraphEmailNotificationService:
         try:
             client = self._get_graph_client()
             if not client:
-                logger.error("❌ Cannot send email - Graph client initialization failed")
+                logger.error("[ERROR] Cannot send email - Graph client initialization failed")
                 return False
             
-            logger.info(f"📧 Preparing email via Graph API")
+            logger.info(f"[EMAIL] Preparing email via Graph API")
             logger.info(f"   From: {self.sender_email}")
             logger.info(f"   To: {recipient}")
             logger.info(f"   Subject: {subject}")
@@ -128,11 +128,11 @@ class GraphEmailNotificationService:
             # Send the email using the sender's mailbox
             await client.users.by_user_id(self.sender_email).send_mail.post(send_mail_body)
             
-            logger.info(f"✅ Email successfully sent via Graph API to {recipient}")
+            logger.info(f"[OK] Email successfully sent via Graph API to {recipient}")
             return True
             
         except Exception as e:
-            logger.error(f"❌ Failed to send email via Graph API: {e}")
+            logger.error(f"[ERROR] Failed to send email via Graph API: {e}")
             logger.error(f"   Error type: {type(e).__name__}")
             import traceback
             logger.error(f"   Traceback: {traceback.format_exc()}")
@@ -174,7 +174,7 @@ class GraphEmailNotificationService:
             file_name = SensitiveDataDetector.mask_sensitive_data(str(file_name))
 
         if not all([self.tenant_id, self.client_id, self.client_secret, self.sender_email]):
-            logger.error("❌ Email credentials not configured!")
+            logger.error("[ERROR] Email credentials not configured!")
             return False
         
         # Convert list to string if needed
@@ -373,7 +373,7 @@ class GraphEmailNotificationService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>{'🚨 CRITICAL ALERT' if is_critical else '🚫 Email Blocked'}</h1>
+                    <h1>{'CRITICAL ALERT' if is_critical else 'Email Blocked'}</h1>
                     <p>Data Loss Prevention System</p>
                 </div>
                 
@@ -381,14 +381,14 @@ class GraphEmailNotificationService:
                     <p style="font-size: 16px; color: #212529;">Dear User,</p>
                     
                     <div class="alert-box">
-                        <strong>{'⚠️ YOUR ACCOUNT HAS BEEN LOCKED' if is_critical else '⚠️ Your email/document was blocked by our security system'}</strong>
+                        <strong>{'WARNING: YOUR ACCOUNT HAS BEEN LOCKED' if is_critical else 'WARNING: Your email/document was blocked by our security system'}</strong>
                     </div>
                     
                     <p>Your recent {'action' if is_critical else 'email or document'} was blocked because it contains <strong>sensitive information</strong> that violates company security policies.</p>
                     
                     <div class="info-box">
                         <div class="info-item">
-                            <div class="info-label">🔍 Violation Type:</div>
+                            <div class="info-label">Violation Type:</div>
                             <div class="info-value">
                                 <div class="violation-types">
                                     {violation_tags_html}
@@ -396,32 +396,32 @@ class GraphEmailNotificationService:
                             </div>
                         </div>
                         <div class="info-item">
-                            <div class="info-label">📊 Violation Count:</div>
+                            <div class="info-label">Violation Count:</div>
                             <div class="info-value"><strong style="font-size: 18px; color: {'#dc3545' if is_critical else '#ffc107'};">{violation_count}</strong> / 3 violations</div>
                         </div>
-                        {f'<div class="info-item"><div class="info-label">📄 File Name:</div><div class="info-value">{file_name}</div></div>' if file_name else ''}
-                        {f'<div class="info-item"><div class="info-label">📋 Incident:</div><div class="info-value">{incident_title}</div></div>' if incident_title else ''}
+                        {f'<div class="info-item"><div class="info-label">File Name:</div><div class="info-value">{file_name}</div></div>' if file_name else ''}
+                        {f'<div class="info-item"><div class="info-label">Incident:</div><div class="info-value">{incident_title}</div></div>' if incident_title else ''}
                         <div class="info-item">
-                            <div class="info-label">⏰ Timestamp:</div>
+                            <div class="info-label">Timestamp:</div>
                             <div class="info-value">{datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")} UTC</div>
                         </div>
                     </div>
                     
                     {f'''
-                    <h3 style="color: #495057; margin-top: 30px;">🔍 Detected Content (Redacted for Security):</h3>
+                    <h3 style="color: #495057; margin-top: 30px;">Detected Content (Redacted for Security):</h3>
                     <div class="redacted-box">
                         <p><strong>Sample of blocked content:</strong></p>
                         <p style="font-size: 14px; margin-top: 10px;">
                             {blocked_content_summary}
                         </p>
                         <p style="font-size: 11px; color: #856404; margin-top: 15px; border-top: 1px dashed #ffc107; padding-top: 10px;">
-                            ⚠️ <strong>Note:</strong> Actual sensitive data has been redacted for security purposes. The original content contained identifiable information.
+                            <strong>Note:</strong> Actual sensitive data has been redacted for security purposes. The original content contained identifiable information.
                         </p>
                     </div>
                     ''' if blocked_content_summary else ''}
                     
                     <div class="education-section">
-                        <h3>🔒 What Sensitive Data Was Detected?</h3>
+                        <h3>What Sensitive Data Was Detected?</h3>
                         <p>Our DLP system identified the following types of protected information in your content:</p>
                         <ul>
                             <li><strong>KTP (Kartu Tanda Penduduk)</strong> - Indonesian National ID Card numbers (16 digits)</li>
@@ -432,12 +432,12 @@ class GraphEmailNotificationService:
                         <p style="margin-top: 15px;"><strong>Why this matters:</strong> These data types are protected by Indonesian regulations (UU ITE, GDPR compliance) and company security policies. Unauthorized sharing can lead to identity theft, fraud, or regulatory penalties.</p>
                     </div>
                     
-                    {'<div class="critical-warning"><h3>🚨 ACCOUNT LOCKED - IMMEDIATE ACTION REQUIRED</h3><p>You have reached the maximum violation limit (3 violations).</p><p>Your account sign-in has been revoked to protect company data.</p><p style="margin-top: 15px; font-size: 14px;">To regain access, you must:</p><ul style="text-align: left; display: inline-block; margin: 10px auto;"><li>Contact IT Security immediately</li><li>Complete mandatory security training</li><li>Review and acknowledge security policies</li></ul><p style="margin-top: 15px;"><strong>Contact:</strong> <a href="mailto:' + (self.admin_email or 'security@company.com') + '" style="color: #dc3545;">' + (self.admin_email or 'security@company.com') + '</a></p></div>' if is_critical else ''}
+                    {'<div class="critical-warning"><h3>ACCOUNT LOCKED - IMMEDIATE ACTION REQUIRED</h3><p>You have reached the maximum violation limit (3 violations).</p><p>Your account sign-in has been revoked to protect company data.</p><p style="margin-top: 15px; font-size: 14px;">To regain access, you must:</p><ul style="text-align: left; display: inline-block; margin: 10px auto;"><li>Contact IT Security immediately</li><li>Complete mandatory security training</li><li>Review and acknowledge security policies</li></ul><p style="margin-top: 15px;"><strong>Contact:</strong> <a href="mailto:' + (self.admin_email or 'security@company.com') + '" style="color: #dc3545;">' + (self.admin_email or 'security@company.com') + '</a></p></div>' if is_critical else ''}
                     
-                    {f'<div class="alert-box"><strong>⚠️ WARNING:</strong> You have <strong>{violation_count} out of 3</strong> violations. One more violation will result in automatic account suspension and mandatory security training.</div>' if is_warning and not is_critical else ''}
+                    {f'<div class="alert-box"><strong>WARNING:</strong> You have <strong>{violation_count} out of 3</strong> violations. One more violation will result in automatic account suspension and mandatory security training.</div>' if is_warning and not is_critical else ''}
                     
                     <div class="steps-list">
-                        <h3 style="color: #004085; margin-top: 0;">📋 Required Actions:</h3>
+                        <h3 style="color: #004085; margin-top: 0;">Required Actions:</h3>
                         <ol>
                             <li><strong>Review your content:</strong> Remove all sensitive information (KTP, NPWP, Employee IDs) before sending</li>
                             <li><strong>Use approved channels:</strong> For sharing sensitive data, use secure company portals or encrypted file sharing systems</li>
@@ -448,7 +448,7 @@ class GraphEmailNotificationService:
                     </div>
                     
                     <div class="education-section">
-                        <h3>✅ Best Practices for Data Security:</h3>
+                        <h3>Best Practices for Data Security:</h3>
                         <ul>
                             <li><strong>Never include full ID numbers</strong> in emails or non-encrypted documents</li>
                             <li><strong>Use "Read Only" permissions</strong> when sharing documents in SharePoint/OneDrive</li>
@@ -459,7 +459,7 @@ class GraphEmailNotificationService:
                     </div>
                     
                     <p style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-radius: 4px; font-size: 14px;">
-                        💡 <strong>Tip:</strong> If you believe this is a legitimate business need, request access through the proper channels with manager approval and use the company's secure data sharing platform.
+                        <strong>Tip:</strong> If you believe this is a legitimate business need, request access through the proper channels with manager approval and use the company's secure data sharing platform.
                     </p>
                     
                     <p style="margin-top: 25px; color: #6c757d;">If you believe this alert is in error or need assistance understanding these policies, please contact your IT Security team immediately.</p>
@@ -602,7 +602,7 @@ class GraphEmailNotificationService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>📚 Security Training Required</h1>
+                    <h1>Security Training Required</h1>
                     <p>Mandatory DLP Policy Socialization</p>
                 </div>
                 
@@ -610,7 +610,7 @@ class GraphEmailNotificationService:
                     <p style="font-size: 16px;">Dear User,</p>
                     
                     <div class="warning-box">
-                        <strong>⚠️ You have accumulated {violation_count} DLP policy violations</strong>
+                        <strong>WARNING: You have accumulated {violation_count} DLP policy violations</strong>
                     </div>
                     
                     <p>Due to repeated violations of our Data Loss Prevention (DLP) policies, you are <strong>required to complete mandatory security training</strong> within the next 3 business days.</p>
@@ -624,31 +624,31 @@ class GraphEmailNotificationService:
                     </ul>
                     
                     <div class="training-box">
-                        <h3 style="color: #0c5460; margin-top: 0;">📋 Training Details</h3>
+                        <h3 style="color: #0c5460; margin-top: 0;">Training Details</h3>
                         <div class="training-item">
-                            <div class="training-label">📖 Topic:</div>
+                            <div class="training-label">Topic:</div>
                             <div class="training-value">Data Security & DLP Best Practices</div>
                         </div>
                         <div class="training-item">
-                            <div class="training-label">⏱️ Duration:</div>
+                            <div class="training-label">Duration:</div>
                             <div class="training-value">60 minutes (self-paced)</div>
                         </div>
                         <div class="training-item">
-                            <div class="training-label">💻 Format:</div>
+                            <div class="training-label">Format:</div>
                             <div class="training-value">Online via Microsoft Teams / Learning Portal</div>
                         </div>
                         <div class="training-item">
-                            <div class="training-label">📅 Deadline:</div>
+                            <div class="training-label">Deadline:</div>
                             <div class="training-value">Within 3 business days from receipt</div>
                         </div>
                         <div class="training-item">
-                            <div class="training-label">✅ Certificate:</div>
+                            <div class="training-label">Certificate:</div>
                             <div class="training-value">Yes - Required for compliance records</div>
                         </div>
                     </div>
                     
                     <div class="module-list">
-                        <h4>📚 Training Modules (60 minutes total):</h4>
+                        <h4>Training Modules (60 minutes total):</h4>
                         <ol style="margin: 15px 0; padding-left: 20px;">
                             <li><strong>Introduction to Data Security</strong> (10 min)
                                 <ul style="margin-top: 5px; font-size: 14px;">
@@ -687,12 +687,12 @@ class GraphEmailNotificationService:
                     </div>
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://teams.microsoft.com/l/meetup-join/" class="btn">🎓 Start Training Now</a>
+                        <a href="https://teams.microsoft.com/l/meetup-join/" class="btn">Start Training Now</a>
                         <p style="font-size: 13px; color: #6c757d; margin-top: 10px;">Training link will be active for 3 business days</p>
                     </div>
                     
                     <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 15px; margin: 25px 0;">
-                        <p style="margin: 0; color: #856404;"><strong>⚠️ Important:</strong> Failure to complete this training within the deadline may result in:</p>
+                        <p style="margin: 0; color: #856404;"><strong>Important:</strong> Failure to complete this training within the deadline may result in:</p>
                         <ul style="color: #856404; margin: 10px 0;">
                             <li>Temporary account suspension</li>
                             <li>Escalation to your manager and HR</li>
@@ -703,9 +703,9 @@ class GraphEmailNotificationService:
                     
                     <p style="margin-top: 25px;">Upon successful completion, you will receive:</p>
                     <ul>
-                        <li>✅ Security awareness certificate</li>
-                        <li>✅ Updated access permissions</li>
-                        <li>✅ Reset of violation counter (with probationary period)</li>
+                        <li>Security awareness certificate</li>
+                        <li>Updated access permissions</li>
+                        <li>Reset of violation counter (with probationary period)</li>
                     </ul>
                     
                     <p style="margin-top: 25px; color: #6c757d;">If you have questions or need assistance scheduling the training, please contact:</p>
@@ -714,7 +714,7 @@ class GraphEmailNotificationService:
                     </p>
                     
                     <p style="margin-top: 30px; padding: 15px; background: #e7f3ff; border-radius: 4px; font-size: 14px;">
-                        💡 <strong>Pro Tip:</strong> Set aside uninterrupted time to complete the training. You can pause and resume, but all modules must be completed for certification.
+                        <strong>Pro Tip:</strong> Set aside uninterrupted time to complete the training. You can pause and resume, but all modules must be completed for certification.
                     </p>
                 </div>
                 
@@ -892,7 +892,7 @@ class GraphEmailNotificationService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>{'🚨 CRITICAL SECURITY ALERT' if is_critical else '⚠️ DLP Security Alert'}</h1>
+                    <h1>{'CRITICAL SECURITY ALERT' if is_critical else 'DLP Security Alert'}</h1>
                     <p>Immediate Administrative Action Required</p>
                 </div>
                 
@@ -901,7 +901,7 @@ class GraphEmailNotificationService:
                     
                     <div class="alert-section">
                         <p style="margin: 0; font-size: 15px; {'color: #721c24;' if is_critical else 'color: #856404;'}">
-                            <strong>{'🚨 CRITICAL: User account has been automatically locked due to repeated policy violations' if is_critical else '⚠️ High-risk DLP activity detected requiring review'}</strong>
+                            <strong>{'CRITICAL: User account has been automatically locked due to repeated policy violations' if is_critical else 'WARNING: High-risk DLP activity detected requiring review'}</strong>
                         </p>
                     </div>
                     
@@ -916,42 +916,42 @@ class GraphEmailNotificationService:
                         </div>
                     </div>
                     
-                    <h3 style="color: #495057; margin-top: 30px;">📋 Incident Details</h3>
+                    <h3 style="color: #495057; margin-top: 30px;">Incident Details</h3>
                     <table class="detail-table">
                         <tr>
                             <th>Field</th>
                             <th>Value</th>
                         </tr>
                         <tr>
-                            <td><strong>👤 User</strong></td>
+                            <td><strong>User</strong></td>
                             <td>{user}</td>
                         </tr>
                         <tr>
-                            <td><strong>📊 Total Violations</strong></td>
+                            <td><strong>Total Violations</strong></td>
                             <td><span style="font-size: 18px; font-weight: 700; color: {'#dc3545' if is_critical else '#ffc107'};">{violation_count}</span></td>
                         </tr>
                         <tr>
-                            <td><strong>🔍 Violation Types</strong></td>
+                            <td><strong>Violation Types</strong></td>
                             <td>{violation_types_str}</td>
                         </tr>
                         <tr>
-                            <td><strong>📋 Incident Title</strong></td>
+                            <td><strong>Incident Title</strong></td>
                             <td>{incident_title}</td>
                         </tr>
-                        {f'<tr><td><strong>📄 File Name</strong></td><td>{file_name}</td></tr>' if file_name else ''}
+                        {f'<tr><td><strong>File Name</strong></td><td>{file_name}</td></tr>' if file_name else ''}
                         <tr>
-                            <td><strong>⚙️ Action Taken</strong></td>
+                            <td><strong>Action Taken</strong></td>
                             <td><span class="action-badge">{action_taken}</span></td>
                         </tr>
                         <tr>
-                            <td><strong>⏰ Timestamp</strong></td>
+                            <td><strong>Timestamp</strong></td>
                             <td>{datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")} UTC</td>
                         </tr>
                     </table>
                     
                     {'''
                     <div style="background: #f8d7da; border: 2px solid #dc3545; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                        <h3 style="color: #721c24; margin-top: 0;">🚨 Critical Actions Performed</h3>
+                        <h3 style="color: #721c24; margin-top: 0;">Critical Actions Performed</h3>
                         <ul style="color: #721c24; margin: 10px 0;">
                             <li><strong>Account sign-in revoked</strong> - User cannot access company resources</li>
                             <li><strong>Active sessions terminated</strong> - All current sessions have been logged out</li>
@@ -960,7 +960,7 @@ class GraphEmailNotificationService:
                         </ul>
                     </div>
                     
-                    <h3 style="color: #495057;">📋 Required Administrative Actions</h3>
+                    <h3 style="color: #495057;">Required Administrative Actions</h3>
                     <ol style="line-height: 1.8;">
                         <li><strong>Review incident details</strong> in the DLP dashboard</li>
                         <li><strong>Contact user's manager</strong> for incident review and discussion</li>
@@ -971,7 +971,7 @@ class GraphEmailNotificationService:
                     </ol>
                     ''' if is_critical else '''
                     <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                        <h3 style="color: #856404; margin-top: 0;">⚠️ Recommended Actions</h3>
+                        <h3 style="color: #856404; margin-top: 0;">Recommended Actions</h3>
                         <ul style="color: #856404; margin: 10px 0;">
                             <li><strong>Monitor user activity</strong> - Watch for additional violations</li>
                             <li><strong>Review with manager</strong> - Discuss proper data handling procedures</li>
@@ -981,13 +981,13 @@ class GraphEmailNotificationService:
                     '''}
                     
                     <div style="text-align: center; margin: 30px 0;">
-                        <a href="https://dlp-engine-a9g7hjfvczfjmdn.eastus-01.azurewebsites.net/" class="btn">📊 View Full Dashboard</a>
-                        <a href="https://portal.azure.com/" class="btn">☁️ Azure Portal</a>
+                        <a href="https://dlp-engine-a9g7hjfvczfjmdn.eastus-01.azurewebsites.net/" class="btn">View Full Dashboard</a>
+                        <a href="https://portal.azure.com/" class="btn">Azure Portal</a>
                     </div>
                     
                     <div style="background: #e7f3ff; border-left: 4px solid #007bff; padding: 15px; margin: 25px 0; border-radius: 4px;">
                         <p style="margin: 0; color: #004085;">
-                            <strong>💡 Note:</strong> This alert was automatically generated by the DLP Remediation Engine. All actions have been logged and are available for audit review.
+                            <strong>Note:</strong> This alert was automatically generated by the DLP Remediation Engine. All actions have been logged and are available for audit review.
                         </p>
                     </div>
                     
@@ -1025,7 +1025,7 @@ class GraphEmailNotificationService:
             # Call Microsoft Graph API to revoke sessions
             await client.users.by_user_id(user_email).revoke_sign_in_sessions.post()
 
-            logger.info(f"✅ Revoked all sign-in sessions for user: {user_email}")
+            logger.info(f"[OK] Revoked all sign-in sessions for user: {user_email}")
             return {
                 "ok": True,
                 "status": 200,
@@ -1033,7 +1033,7 @@ class GraphEmailNotificationService:
             }
 
         except Exception as e:
-            logger.error(f"❌ Failed to revoke sessions for {user_email}: {e}")
+            logger.error(f"[ERROR] Failed to revoke sessions for {user_email}: {e}")
             return {
                 "ok": False,
                 "status": 500,
@@ -1063,7 +1063,7 @@ class GraphEmailNotificationService:
             await client.users.by_user_id(user_email).patch(user_update)
 
             action = "blocked" if block else "unblocked"
-            logger.info(f"✅ Successfully {action} user account: {user_email}")
+            logger.info(f"[OK] Successfully {action} user account: {user_email}")
             return {
                 "ok": True,
                 "status": 200,
@@ -1072,15 +1072,15 @@ class GraphEmailNotificationService:
 
         except Exception as e:
             error_msg = str(e)
-            logger.error(f"❌ Failed to {'block' if block else 'unblock'} user {user_email}: {e}")
+            logger.error(f"[ERROR] Failed to {'block' if block else 'unblock'} user {user_email}: {e}")
             logger.error(f"   Exception type: {type(e).__name__}")
 
             # Check for common permission errors
             if "Insufficient privileges" in error_msg or "Authorization_RequestDenied" in error_msg:
-                logger.error("   ⚠️ PERMISSION ISSUE: Missing User.ReadWrite.All or admin consent not granted")
-                logger.error("   📋 See AZURE_PERMISSIONS.md for setup instructions")
+                logger.error("   [WARNING] PERMISSION ISSUE: Missing User.ReadWrite.All or admin consent not granted")
+                logger.error("   [INFO] See AZURE_PERMISSIONS.md for setup instructions")
             elif "Resource" in error_msg and "not found" in error_msg:
-                logger.error(f"   ⚠️ USER NOT FOUND: {user_email} doesn't exist in Azure AD")
+                logger.error(f"   [WARNING] USER NOT FOUND: {user_email} doesn't exist in Azure AD")
 
             return {
                 "ok": False,
@@ -1100,29 +1100,29 @@ class GraphEmailNotificationService:
         Returns:
             dict: {"ok": bool, "blocked": bool, "sessions_revoked": bool, "message": str}
         """
-        logger.info(f"🚨 Initiating full access revocation for user: {user_email}")
+        logger.info(f"[CRITICAL] Initiating full access revocation for user: {user_email}")
 
         # Step 1: Block the account
         block_result = await self.block_user_account(user_email, block=True)
 
         # Log block result details
         if not block_result["ok"]:
-            logger.error(f"   ❌ Account blocking failed: {block_result.get('message', 'Unknown error')}")
+            logger.error(f"   [ERROR] Account blocking failed: {block_result.get('message', 'Unknown error')}")
 
         # Step 2: Revoke all active sessions
         sessions_result = await self.revoke_user_sessions(user_email)
 
         # Log sessions result details
         if not sessions_result["ok"]:
-            logger.error(f"   ❌ Session revocation failed: {sessions_result.get('message', 'Unknown error')}")
+            logger.error(f"   [ERROR] Session revocation failed: {sessions_result.get('message', 'Unknown error')}")
 
         overall_success = block_result["ok"] and sessions_result["ok"]
 
         if overall_success:
-            logger.info(f"✅ Full access revocation completed for {user_email}")
+            logger.info(f"[OK] Full access revocation completed for {user_email}")
             message = f"Account blocked and all sessions revoked for {user_email}"
         else:
-            logger.warning(f"⚠️ Partial revocation for {user_email}")
+            logger.warning(f"[WARNING] Partial revocation for {user_email}")
             message = f"Partial revocation: Block={block_result['ok']}, Sessions={sessions_result['ok']}"
 
             # Add detailed failure message
