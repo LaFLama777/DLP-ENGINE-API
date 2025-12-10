@@ -3150,15 +3150,15 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
             message_text = "Warning email sent successfully"
 
         elif action == "revoke":
-            # Revoke account - this would integrate with Microsoft Graph API
-            # For now, send notification and log the action
-            subject = "🚫 URGENT: Account Access Suspended - Data Security Violation"
+            # CRITICAL FIX: Send notification email FIRST before revoking
+            # This ensures user can receive the email before their account is disabled
+            subject = "🚫 URGENT: Account Access Being Suspended - Data Security Violation"
             body = f"""
             <html>
                 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-                    <h2 style="color: #ef4444;">🚫 Account Access Suspended</h2>
+                    <h2 style="color: #ef4444;">🚫 Account Access Suspension Notice</h2>
                     <p>Dear Team Member,</p>
-                    <p><strong style="color: #dc2626;">Your account access has been temporarily suspended due to critical data security policy violations.</strong></p>
+                    <p><strong style="color: #dc2626;">Your account access is being suspended immediately due to critical data security policy violations.</strong></p>
 
                     <div style="background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0;">
                         <strong>Suspension Details:</strong><br>
@@ -3169,7 +3169,7 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
 
                     <h3>What This Means:</h3>
                     <ul>
-                        <li>Your account access is temporarily disabled</li>
+                        <li>Your account access will be disabled immediately</li>
                         <li>You will not be able to access company systems</li>
                         <li>This action has been escalated to management and HR</li>
                     </ul>
@@ -3194,7 +3194,32 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
             """
             message_text = "Account access revocation initiated - User notified"
 
-            # Actually revoke user access via Microsoft Graph API
+            # Send email FIRST before revoking access
+            email_sent = False
+            if EMAIL_ENABLED:
+                try:
+                    logger.info(f"📧 Sending notification email BEFORE revoking access for {user_email}...")
+                    email_sent = await email_service.send_email_via_graph(
+                        recipient=user_email,
+                        subject=subject,
+                        html_body=body
+                    )
+
+                    if email_sent:
+                        logger.info(f"✅ Notification email sent successfully to {user_email}")
+
+                        # Wait 3 seconds to ensure email delivery before revoking
+                        import asyncio
+                        logger.info(f"⏳ Waiting 3 seconds to ensure email delivery...")
+                        await asyncio.sleep(3)
+                        logger.info(f"✅ Email delivery window completed, proceeding with revocation...")
+                    else:
+                        logger.warning(f"⚠️ Email send returned False, but continuing with revocation")
+
+                except Exception as e:
+                    logger.error(f"⚠️ Failed to send notification email (continuing with revocation): {e}")
+
+            # Actually revoke user access via Microsoft Graph API AFTER email sent
             if EMAIL_ENABLED:
                 try:
                     logger.info(f"🚨 Revoking access for user: {user_email}")
@@ -3202,21 +3227,21 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
 
                     if revoke_result["ok"]:
                         logger.info(f"✅ Successfully revoked access for {user_email}: Account blocked={revoke_result['blocked']}, Sessions revoked={revoke_result['sessions_revoked']}")
-                        message_text = f"Account DISABLED and sessions REVOKED for {user_email}"
+                        message_text = f"Email sent, account DISABLED and sessions REVOKED for {user_email}"
                     else:
                         logger.error(f"❌ Failed to revoke access for {user_email}: {revoke_result['message']}")
-                        message_text = f"Revocation attempted but failed: {revoke_result['message']}"
+                        message_text = f"Email sent, but revocation failed: {revoke_result['message']}"
                 except Exception as e:
                     logger.error(f"❌ Exception during revocation for {user_email}: {e}")
-                    message_text = f"Revocation error: {str(e)}"
+                    message_text = f"Email sent, but revocation error: {str(e)}"
             else:
                 logger.warning(f"REVOKE ACTION: User {user_email} - Incident #{incident_id} - Email service disabled, cannot revoke access")
 
         else:
             return JSONResponse({"detail": "Invalid action"}, status_code=400)
 
-        # Send email if email service is configured
-        if EMAIL_ENABLED:
+        # Send email for education and warning actions (revoke already sent email above)
+        if EMAIL_ENABLED and action in ["education", "warning"]:
             try:
                 # Use Microsoft Graph API to send email (await since we're in async context)
                 success = await email_service.send_email_via_graph(
@@ -3233,9 +3258,10 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
             except Exception as e:
                 logger.error(f"❌ Failed to send email for action '{action}': {e}")
                 return JSONResponse({"detail": f"Action logged but email failed: {str(e)}"}, status_code=500)
-        else:
+        elif not EMAIL_ENABLED and action in ["education", "warning"]:
             logger.info(f"Action '{action}' logged for user {user_email} (email service disabled)")
             message_text += " (Email service not configured - action logged only)"
+        # For revoke action, email was already sent before revocation
 
         return {"success": True, "message": message_text, "action": action, "incident_id": incident_id}
 
@@ -3285,14 +3311,85 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
             "ok": True,
             "blocked": False,
             "sessions_revoked": False,
+            "email_sent": False,
             "message": "",
             "details": [],
             "violation_count": violation_count
         }
 
-        # Execute requested actions
+        # CRITICAL FIX: Send notification email FIRST before blocking/revoking
+        # This ensures user can receive the email before their account is disabled
+        will_perform_remediation = ("blockUser" in actions or "revokeSessions" in actions) and EMAIL_ENABLED
+
+        if will_perform_remediation:
+            try:
+                logger.info(f"   📧 Sending notification email BEFORE remediation actions...")
+                notification_subject = "🚫 URGENT: Account Access Will Be Suspended - Security Violation"
+                notification_body = f"""
+                <html>
+                <body style="font-family: Arial, sans-serif;">
+                    <h2 style="color: #dc2626;">Account Access Suspension Notice</h2>
+                    <p><strong style="color: #dc2626;">Your account access is being suspended immediately due to security policy violations detected by our automated monitoring system.</strong></p>
+
+                    <div style="background: #fee; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+                        <p><strong>Actions Being Taken:</strong></p>
+                        <ul>
+                            {"<li>🚫 Account will be disabled</li>" if "blockUser" in actions else ""}
+                            {"<li>🚫 All active sessions will be terminated</li>" if "revokeSessions" in actions else ""}
+                        </ul>
+                    </div>
+
+                    <p><strong>Incident Details:</strong></p>
+                    <ul>
+                        <li>Incident ID: {incident_id_str}</li>
+                        <li>Severity: {severity}</li>
+                        <li>Title: {incident_title}</li>
+                        <li>Violation Count: {violation_count}</li>
+                        <li>Timestamp: {datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
+                    </ul>
+
+                    <p><strong>Next Steps:</strong></p>
+                    <ol>
+                        <li>Contact IT Security immediately</li>
+                        <li>Do NOT attempt to access systems using alternate methods</li>
+                        <li>Complete mandatory security training before reinstatement</li>
+                    </ol>
+
+                    <p style="color: #666; font-size: 12px;">This is an automated message from the DLP Remediation System. For assistance, contact your IT Security team.</p>
+                </body>
+                </html>
+                """
+
+                email_result = await email_service.send_email_via_graph(
+                    recipient=user_email,
+                    subject=notification_subject,
+                    html_body=notification_body
+                )
+
+                if email_result:
+                    results["email_sent"] = True
+                    logger.info(f"   ✅ Notification email sent successfully to {user_email}")
+
+                    # Wait 3 seconds to ensure email delivery before blocking account
+                    import asyncio
+                    logger.info(f"   ⏳ Waiting 3 seconds to ensure email delivery...")
+                    await asyncio.sleep(3)
+                    logger.info(f"   ✅ Email delivery window completed, proceeding with remediation actions...")
+                else:
+                    logger.warning(f"   ⚠️ Email send returned False, but continuing with remediation")
+
+            except Exception as e:
+                logger.error(f"   ⚠️ Failed to send notification email (continuing with remediation): {e}")
+                results["details"].append({
+                    "action": "emailNotification",
+                    "status": False,
+                    "message": f"Email failed: {str(e)}"
+                })
+
+        # Execute requested actions AFTER email has been sent
         if "blockUser" in actions and EMAIL_ENABLED:
             try:
+                logger.info(f"   🚨 Blocking user account...")
                 block_result = await email_service.block_user_account(user_email, block=True)
                 results["blocked"] = block_result["ok"]
                 results["details"].append({
@@ -3317,6 +3414,7 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
         if "revokeSessions" in actions and EMAIL_ENABLED:
             try:
+                logger.info(f"   🚨 Revoking user sessions...")
                 sessions_result = await email_service.revoke_user_sessions(user_email)
                 results["sessions_revoked"] = sessions_result["ok"]
                 results["details"].append({
@@ -3341,58 +3439,11 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
         # Build summary message
         if results["ok"]:
-            results["message"] = f"Full remediation completed for {user_email}"
+            results["message"] = f"Full remediation completed for {user_email} (Email sent: {results['email_sent']})"
         elif results["blocked"] or results["sessions_revoked"]:
-            results["message"] = f"Partial remediation: Blocked={results['blocked']}, SessionsRevoked={results['sessions_revoked']}"
+            results["message"] = f"Partial remediation: Blocked={results['blocked']}, SessionsRevoked={results['sessions_revoked']}, EmailSent={results['email_sent']}"
         else:
             results["message"] = f"Remediation failed for {user_email}"
-
-        # Send notification email to user
-        if EMAIL_ENABLED and (results["blocked"] or results["sessions_revoked"]):
-            try:
-                notification_subject = "🚫 URGENT: Account Access Suspended - Security Violation"
-                notification_body = f"""
-                <html>
-                <body style="font-family: Arial, sans-serif;">
-                    <h2 style="color: #dc2626;">Account Access Suspended</h2>
-                    <p>Your account has been suspended due to security policy violations detected by our automated monitoring system.</p>
-
-                    <div style="background: #fee; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
-                        <p><strong>Actions Taken:</strong></p>
-                        <ul>
-                            {"<li>✅ Account disabled</li>" if results["blocked"] else ""}
-                            {"<li>✅ All active sessions terminated</li>" if results["sessions_revoked"] else ""}
-                        </ul>
-                    </div>
-
-                    <p><strong>Incident Details:</strong></p>
-                    <ul>
-                        <li>Incident ID: {incident_id_str}</li>
-                        <li>Severity: {severity}</li>
-                        <li>Title: {incident_title}</li>
-                        <li>Timestamp: {datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
-                    </ul>
-
-                    <p><strong>Next Steps:</strong></p>
-                    <ol>
-                        <li>Contact IT Security immediately</li>
-                        <li>Do NOT attempt to access systems using alternate methods</li>
-                        <li>Complete mandatory security training before reinstatement</li>
-                    </ol>
-
-                    <p style="color: #666; font-size: 12px;">This is an automated message from the DLP Remediation System. For assistance, contact your IT Security team.</p>
-                </body>
-                </html>
-                """
-
-                await email_service.send_email_via_graph(
-                    recipient=user_email,
-                    subject=notification_subject,
-                    html_body=notification_body
-                )
-                logger.info(f"   📧 Notification email sent to {user_email}")
-            except Exception as e:
-                logger.error(f"   ⚠️ Failed to send notification email: {e}")
 
         logger.info(f"📊 Remediation summary: {results['message']}")
         return JSONResponse(results)
