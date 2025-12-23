@@ -3262,8 +3262,10 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
 @app.post("/api/remediate")
 async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
     """
-    Accepts remediation requests from Microsoft Sentinel and executes
-    appropriate actions (revoke sessions, block account, send notifications)
+    Accepts remediation requests from Microsoft Sentinel/Logic Apps with 3-tier risk escalation:
+    - LOW (count=1): Education email only, NO blocking
+    - MEDIUM (count=2): Warning email + session revoke (soft block)
+    - CRITICAL (count=3+): Email FIRST -> 3s delay -> account disabled
     """
     try:
         user_email = request.get("userPrincipalName")
@@ -3302,138 +3304,166 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
             "email_sent": False,
             "message": "",
             "details": [],
-            "violation_count": violation_count
+            "violation_count": violation_count,
+            "risk_level": ""
         }
 
-        # CRITICAL FIX: Send notification email FIRST before blocking/revoking
-        # This ensures user can receive the email before their account is disabled
-        will_perform_remediation = ("blockUser" in actions or "revokeSessions" in actions) and EMAIL_ENABLED
+        # ===== 3-TIER RISK ESCALATION LOGIC =====
 
-        if will_perform_remediation:
-            try:
-                logger.info(f"   [EMAIL] Sending notification email BEFORE remediation actions...")
-                notification_subject = "[URGENT] Account Access Will Be Suspended - Security Violation"
-                notification_body = f"""
-                <html>
-                <body style="font-family: Arial, sans-serif;">
-                    <h2 style="color: #dc2626;">Account Access Suspension Notice</h2>
-                    <p><strong style="color: #dc2626;">Your account access is being suspended immediately due to security policy violations detected by our automated monitoring system.</strong></p>
+        # SCENARIO 1: LOW RISK (count=1) - Education email only
+        if violation_count == 1:
+            logger.info(f"🟢 LOW RISK - Violation #{violation_count} for {user_email}")
+            logger.info(f"   Action: Education email only, NO blocking")
+            results["risk_level"] = "LOW"
 
-                    <div style="background: #fee; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
-                        <p><strong>Actions Being Taken:</strong></p>
-                        <ul>
-                            {"<li>Account will be disabled</li>" if "blockUser" in actions else ""}
-                            {"<li>All active sessions will be terminated</li>" if "revokeSessions" in actions else ""}
-                        </ul>
-                    </div>
+            # Send education email
+            if EMAIL_ENABLED and email_service:
+                try:
+                    logger.info(f"   📧 Sending education email...")
+                    result = await email_service.send_violation_notification(
+                        recipient=user_email,
+                        violation_types=["Sensitive Data Detection"],
+                        violation_count=violation_count,
+                        blocked_content_summary=incident_title,
+                        incident_title=incident_title,
+                        file_name="Detected via Sentinel"
+                    )
+                    results["email_sent"] = result
+                    results["details"].append({
+                        "action": "educationEmail",
+                        "status": result,
+                        "message": "Education email sent successfully" if result else "Email send failed"
+                    })
+                    logger.info(f"   ✅ Education email sent to {user_email}")
+                except Exception as e:
+                    logger.error(f"   ❌ Email failed: {e}")
+                    results["details"].append({
+                        "action": "educationEmail",
+                        "status": False,
+                        "message": f"Email error: {str(e)}"
+                    })
 
-                    <p><strong>Incident Details:</strong></p>
-                    <ul>
-                        <li>Incident ID: {incident_id_str}</li>
-                        <li>Severity: {severity}</li>
-                        <li>Title: {incident_title}</li>
-                        <li>Violation Count: {violation_count}</li>
-                        <li>Timestamp: {datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}</li>
-                    </ul>
+            results["message"] = f"LOW risk - Education email sent to {user_email} (no blocking)"
 
-                    <p><strong>Next Steps:</strong></p>
-                    <ol>
-                        <li>Contact IT Security immediately</li>
-                        <li>Do NOT attempt to access systems using alternate methods</li>
-                        <li>Complete mandatory security training before reinstatement</li>
-                    </ol>
+        # SCENARIO 2: MEDIUM RISK (count=2) - Warning email + Session revoke
+        elif violation_count == 2:
+            logger.info(f"🟠 MEDIUM RISK - Violation #{violation_count} for {user_email}")
+            logger.info(f"   Action: Warning email + session revoke (soft block)")
+            results["risk_level"] = "MEDIUM"
 
-                    <p style="color: #666; font-size: 12px;">This is an automated message from the DLP Remediation System. For assistance, contact your IT Security team.</p>
-                </body>
-                </html>
-                """
+            # Send warning email
+            if EMAIL_ENABLED and email_service:
+                try:
+                    logger.info(f"   📧 Sending warning email...")
+                    result = await email_service.send_violation_notification(
+                        recipient=user_email,
+                        violation_types=["Sensitive Data Detection"],
+                        violation_count=violation_count,
+                        blocked_content_summary=incident_title,
+                        incident_title=incident_title,
+                        file_name="Detected via Sentinel"
+                    )
+                    results["email_sent"] = result
+                    results["details"].append({
+                        "action": "warningEmail",
+                        "status": result,
+                        "message": "Warning email sent successfully" if result else "Email send failed"
+                    })
+                    logger.info(f"   ✅ Warning email sent to {user_email}")
+                except Exception as e:
+                    logger.error(f"   ❌ Email failed: {e}")
+                    results["details"].append({
+                        "action": "warningEmail",
+                        "status": False,
+                        "message": f"Email error: {str(e)}"
+                    })
 
-                email_result = await email_service.send_email_via_graph(
-                    recipient=user_email,
-                    subject=notification_subject,
-                    html_body=notification_body
-                )
-
-                if email_result:
-                    results["email_sent"] = True
-                    logger.info(f"   [OK] Notification email sent successfully to {user_email}")
-
-                    # Wait 3 seconds to ensure email delivery before blocking account
-                    import asyncio
-                    logger.info(f"   ⏳ Waiting 3 seconds to ensure email delivery...")
-                    await asyncio.sleep(3)
-                    logger.info(f"   [OK] Email delivery window completed, proceeding with remediation actions...")
-                else:
-                    logger.warning(f"   [WARNING] Email send returned False, but continuing with remediation")
-
-            except Exception as e:
-                logger.error(f"   [WARNING] Failed to send notification email (continuing with remediation): {e}")
-                results["details"].append({
-                    "action": "emailNotification",
-                    "status": False,
-                    "message": f"Email failed: {str(e)}"
-                })
-
-        # Execute requested actions AFTER email has been sent
-        if "blockUser" in actions and EMAIL_ENABLED:
-            try:
-                logger.info(f"   [CRITICAL] Blocking user account...")
-                block_result = await email_service.block_user_account(user_email, block=True)
-                results["blocked"] = block_result["ok"]
-                results["details"].append({
-                    "action": "blockUser",
-                    "status": block_result["ok"],
-                    "message": block_result["message"]
-                })
-
-                if not block_result["ok"]:
+            # Revoke sessions (soft block - account stays active)
+            if settings.FEATURE_ACCOUNT_REVOCATION:
+                try:
+                    logger.info(f"   🔄 Performing soft block (session revoke only)...")
+                    revoke_result = await perform_soft_block(user_email)
+                    results["sessions_revoked"] = revoke_result
+                    results["details"].append({
+                        "action": "softBlock",
+                        "status": revoke_result,
+                        "message": "Sessions revoked (account still active)" if revoke_result else "Session revoke failed"
+                    })
+                    logger.info(f"   ✅ Sessions revoked for {user_email} (account still active, can re-login)")
+                except Exception as e:
+                    logger.error(f"   ❌ Session revocation failed: {e}")
                     results["ok"] = False
-                    logger.error(f"   [ERROR] Failed to block user: {block_result['message']}")
-                else:
-                    logger.info(f"   [OK] User account blocked successfully")
-            except Exception as e:
-                results["ok"] = False
-                results["details"].append({
-                    "action": "blockUser",
-                    "status": False,
-                    "message": str(e)
-                })
-                logger.error(f"   [ERROR] Exception blocking user: {e}")
+                    results["details"].append({
+                        "action": "softBlock",
+                        "status": False,
+                        "message": f"Session revoke error: {str(e)}"
+                    })
 
-        if "revokeSessions" in actions and EMAIL_ENABLED:
-            try:
-                logger.info(f"   [CRITICAL] Revoking user sessions...")
-                sessions_result = await email_service.revoke_user_sessions(user_email)
-                results["sessions_revoked"] = sessions_result["ok"]
-                results["details"].append({
-                    "action": "revokeSessions",
-                    "status": sessions_result["ok"],
-                    "message": sessions_result["message"]
-                })
+            results["message"] = f"MEDIUM risk - Warning sent + sessions revoked for {user_email}"
 
-                if not sessions_result["ok"]:
+        # SCENARIO 3: CRITICAL RISK (count>=3) - Email FIRST -> 3s delay -> Account disabled
+        else:  # violation_count >= 3
+            logger.info(f"🔴 CRITICAL RISK - Violation #{violation_count} for {user_email}")
+            logger.info(f"   Action: Email FIRST → 3s delay → Account disabled")
+            results["risk_level"] = "CRITICAL"
+
+            # Step 1: Send email FIRST (user gets notified before being blocked)
+            if EMAIL_ENABLED and email_service:
+                try:
+                    logger.info(f"   📧 Sending critical alert email FIRST (before blocking)...")
+                    result = await email_service.send_violation_notification(
+                        recipient=user_email,
+                        violation_types=["Sensitive Data Detection"],
+                        violation_count=violation_count,
+                        blocked_content_summary=incident_title,
+                        incident_title=incident_title,
+                        file_name="Detected via Sentinel"
+                    )
+                    results["email_sent"] = result
+                    results["details"].append({
+                        "action": "criticalEmail",
+                        "status": result,
+                        "message": "Critical alert email sent" if result else "Email send failed"
+                    })
+                    logger.info(f"   ✅ Critical alert email sent to {user_email}")
+                except Exception as e:
+                    logger.error(f"   ❌ Email failed: {e}")
+                    results["details"].append({
+                        "action": "criticalEmail",
+                        "status": False,
+                        "message": f"Email error: {str(e)}"
+                    })
+
+            # Step 2: Wait 3 seconds (email-first mechanism for better UX)
+            logger.info(f"   ⏳ Waiting 3 seconds to ensure email delivery...")
+            await asyncio.sleep(3)
+            logger.info(f"   ✅ 3 second delay completed")
+
+            # Step 3: Disable account (hard block)
+            if settings.FEATURE_ACCOUNT_REVOCATION:
+                try:
+                    logger.info(f"   🔒 Disabling account for {user_email}...")
+                    block_result = await perform_hard_block(user_email)
+                    results["blocked"] = block_result
+                    results["details"].append({
+                        "action": "hardBlock",
+                        "status": block_result,
+                        "message": "Account DISABLED" if block_result else "Account disable failed"
+                    })
+                    logger.info(f"   ✅ Account DISABLED for {user_email}")
+                except Exception as e:
+                    logger.error(f"   ❌ Account revocation failed: {e}")
                     results["ok"] = False
-                    logger.error(f"   [ERROR] Failed to revoke sessions: {sessions_result['message']}")
-                else:
-                    logger.info(f"   [OK] User sessions revoked successfully")
-            except Exception as e:
-                results["ok"] = False
-                results["details"].append({
-                    "action": "revokeSessions",
-                    "status": False,
-                    "message": str(e)
-                })
-                logger.error(f"   [ERROR] Exception revoking sessions: {e}")
+                    results["details"].append({
+                        "action": "hardBlock",
+                        "status": False,
+                        "message": f"Account disable error: {str(e)}"
+                    })
 
-        # Build summary message
-        if results["ok"]:
-            results["message"] = f"Full remediation completed for {user_email} (Email sent: {results['email_sent']})"
-        elif results["blocked"] or results["sessions_revoked"]:
-            results["message"] = f"Partial remediation: Blocked={results['blocked']}, SessionsRevoked={results['sessions_revoked']}, EmailSent={results['email_sent']}"
-        else:
-            results["message"] = f"Remediation failed for {user_email}"
+            results["message"] = f"CRITICAL risk - Email sent + account disabled for {user_email}"
 
-        logger.info(f"[INFO] Remediation summary: {results['message']}")
+        # Log final summary
+        logger.info(f"✅ Remediation summary: {results['message']}")
         return JSONResponse(results)
 
     except Exception as e:
