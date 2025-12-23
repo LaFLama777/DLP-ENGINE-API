@@ -1,19 +1,9 @@
-"""
-DLP Remediation Engine - Main Application
 
-Integrated with all refactored modules:
-- Centralized configuration (config.py)
-- Pydantic models (models.py)
-- Custom exceptions (exceptions.py)
-- Caching layer (cache_service.py)
-- Middleware (middleware.py)
-- Professional logging (logging_config.py)
-- Sensitive data detection (sensitive_data.py)
-"""
 # python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 import os
 import sys
 import traceback
+import asyncio
 from datetime import datetime
 from typing import Optional
 import logging
@@ -78,7 +68,7 @@ from database import (
     get_offense_count,
     Offense
 )
-from graph_client import get_user_details, perform_hard_block
+from graph_client import get_user_details, perform_hard_block, perform_soft_block
 from email_notifications import GraphEmailNotificationService
 from app.ui_components import get_professional_sidebar, get_sidebar_css, get_sidebar_javascript, Icons
 from app.decision_engine import (
@@ -2008,9 +1998,9 @@ async def incidents_overview(
             if count >= 3:
                 return {"level": "CRITICAL", "color": "#ef4444", "icon": "🔴"}
             elif count == 2:
-                return {"level": "HIGH", "color": "#f59e0b", "icon": "🟠"}
+                return {"level": "MEDIUM", "color": "#f59e0b", "icon": "🟠"}
             else:
-                return {"level": "MEDIUM", "color": "#3b82f6", "icon": "🟡"}
+                return {"level": "LOW", "color": "#10b981", "icon": "🟢"}
 
         def get_violation_type_badge(title):
             title_lower = title.lower()
@@ -2591,13 +2581,13 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
             risk_color = "#ef4444"
             risk_icon = "🔴"
         elif violation_count >= 2:
-            risk_level = "HIGH"
+            risk_level = "MEDIUM"
             risk_color = "#f59e0b"
             risk_icon = "🟠"
         else:
-            risk_level = "MEDIUM"
-            risk_color = "#3b82f6"
-            risk_icon = "🟡"
+            risk_level = "LOW"
+            risk_color = "#10b981"
+            risk_icon = "🟢"
 
         return HTMLResponse(f"""
         <!DOCTYPE html>
@@ -3729,50 +3719,123 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
         # Assess risk
         assessment = decision_engine.assess_risk(incident_ctx, user_ctx, file_ctx, offense_hist)
 
-        # Determine actions
-        should_revoke = offense_count >= settings.CRITICAL_VIOLATION_THRESHOLD
+        # Determine risk level and actions 
         violation_types = ["Sensitive Data", "DLP Policy Violation"]
-
-        # Send email notification
         email_sent = False
-        if EMAIL_ENABLED and email_service:
-            try:
-                result = await email_service.send_violation_notification(
-                    recipient=user_upn,
-                    violation_types=violation_types,
-                    violation_count=offense_count,
-                    blocked_content_summary=incident_title,
-                    incident_title=incident_title,
-                    file_name=file_name
-                )
-                email_sent = result
-            except Exception as e:
-                logger.error(f"❌ Email failed: {e}")
-
-        # Revoke account if threshold reached
-        account_revoked = False
-        if should_revoke and settings.FEATURE_ACCOUNT_REVOCATION:
-            try:
-                revoke_result = await perform_hard_block(user_upn)
-                account_revoked = revoke_result
-            except Exception as e:
-                logger.error(f"❌ Revocation failed: {e}")
-
-        # Send admin alert
+        session_revoked = False
+        account_disabled = False
         admin_notified = False
-        if EMAIL_ENABLED and offense_count >= settings.CRITICAL_VIOLATION_THRESHOLD and email_service:
-            try:
-                await email_service.send_admin_alert(
-                    user=user_upn,
-                    incident_title=incident_title,
-                    violation_count=offense_count,
-                    action_taken="Account Revoked" if account_revoked else "Warning Sent",
-                    violation_types=violation_types,
-                    file_name=file_name
-                )
-                admin_notified = True
-            except Exception as e:
-                logger.error(f"Admin alert failed: {e}")
+        action_taken = "None"
+
+        # ============================================================================
+        # SCENARIO 1: LOW RISK (count=1) - Education email only
+        # ============================================================================
+        if offense_count == 1:
+            logger.info(f"🟢 LOW RISK - Violation #{offense_count} for {user_upn}")
+            action_taken = "Education Email"
+
+            # Send education email
+            if EMAIL_ENABLED and email_service:
+                try:
+                    result = await email_service.send_violation_notification(
+                        recipient=user_upn,
+                        violation_types=violation_types,
+                        violation_count=offense_count,
+                        blocked_content_summary=incident_title,
+                        incident_title=incident_title,
+                        file_name=file_name
+                    )
+                    email_sent = result
+                    logger.info(f"✅ Education email sent to {user_upn}")
+                except Exception as e:
+                    logger.error(f"❌ Email failed: {e}")
+
+        # ============================================================================
+        # SCENARIO 2: MEDIUM RISK (count=2) - Warning email + Session revoke
+        # ============================================================================
+        elif offense_count == 2:
+            logger.info(f"🟠 MEDIUM RISK - Violation #{offense_count} for {user_upn}")
+            action_taken = "Warning Email + Session Revoke"
+
+            # Send warning email
+            if EMAIL_ENABLED and email_service:
+                try:
+                    result = await email_service.send_violation_notification(
+                        recipient=user_upn,
+                        violation_types=violation_types,
+                        violation_count=offense_count,
+                        blocked_content_summary=incident_title,
+                        incident_title=incident_title,
+                        file_name=file_name
+                    )
+                    email_sent = result
+                    logger.info(f"✅ Warning email sent to {user_upn}")
+                except Exception as e:
+                    logger.error(f"❌ Email failed: {e}")
+
+            # Revoke sessions (soft block - account still active)
+            if settings.FEATURE_ACCOUNT_REVOCATION:
+                try:
+                    revoke_result = await perform_soft_block(user_upn)
+                    session_revoked = revoke_result
+                    logger.info(f"✅ Sessions revoked for {user_upn} (account still active)")
+                except Exception as e:
+                    logger.error(f"❌ Session revocation failed: {e}")
+
+        # ============================================================================
+        # SCENARIO 3: CRITICAL RISK (count>=3) - Email FIRST → 3s delay → Account disabled
+        # ============================================================================
+        else:  # offense_count >= 3
+            logger.info(f"🔴 CRITICAL RISK - Violation #{offense_count} for {user_upn}")
+            action_taken = "Email First → Account Disabled"
+
+            # Step 1: Send email FIRST (user gets notified before being blocked)
+            if EMAIL_ENABLED and email_service:
+                try:
+                    logger.info(f"📧 Sending critical alert email FIRST (before blocking)...")
+                    result = await email_service.send_violation_notification(
+                        recipient=user_upn,
+                        violation_types=violation_types,
+                        violation_count=offense_count,
+                        blocked_content_summary=incident_title,
+                        incident_title=incident_title,
+                        file_name=file_name
+                    )
+                    email_sent = result
+                    logger.info(f"✅ Critical alert email sent to {user_upn}")
+                except Exception as e:
+                    logger.error(f"❌ Email failed: {e}")
+
+            # Step 2: Wait 3 seconds (email-first mechanism for better UX)
+            logger.info(f"⏳ Waiting 3 seconds to ensure email delivery...")
+            await asyncio.sleep(3)
+            logger.info(f"✅ 3 second delay completed")
+
+            # Step 3: Disable account (hard block)
+            if settings.FEATURE_ACCOUNT_REVOCATION:
+                try:
+                    logger.info(f"🔒 Disabling account for {user_upn}...")
+                    revoke_result = await perform_hard_block(user_upn)
+                    account_disabled = revoke_result
+                    logger.info(f"✅ Account DISABLED for {user_upn}")
+                except Exception as e:
+                    logger.error(f"❌ Account revocation failed: {e}")
+
+            # Send admin alert for critical violations
+            if EMAIL_ENABLED and email_service:
+                try:
+                    await email_service.send_admin_alert(
+                        user=user_upn,
+                        incident_title=incident_title,
+                        violation_count=offense_count,
+                        action_taken=f"Account Disabled (Email sent 3s before blocking)",
+                        violation_types=violation_types,
+                        file_name=file_name
+                    )
+                    admin_notified = True
+                    logger.info(f"✅ Admin alert sent")
+                except Exception as e:
+                    logger.error(f"❌ Admin alert failed: {e}")
 
         response = {
             "status": "success",
@@ -3781,9 +3844,11 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
             "offense_count": offense_count,
             "risk_score": assessment.score if assessment else 0,
             "risk_level": assessment.risk_level if assessment else "Unknown",
+            "action_taken": action_taken,
             "actions": {
                 "email_sent": email_sent,
-                "account_revoked": account_revoked,
+                "session_revoked": session_revoked,
+                "account_disabled": account_disabled,
                 "admin_notified": admin_notified
             },
             "timestamp": datetime.utcnow().isoformat()

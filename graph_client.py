@@ -111,9 +111,34 @@ async def get_user_details(user_upn: str) -> Optional[Dict[str, Any]]:
             original_exception=e
         )
 
+async def perform_soft_block(user_upn: str) -> bool:
+    client = get_graph_client()
+
+    try:
+        # Revoke sign-in sessions only (account stays enabled)
+        logger.info(f"[SOFT BLOCK] Revoking sign-in sessions for: {user_upn}")
+        await client.users.by_user_id(user_upn).revoke_sign_in_sessions().post()
+        logger.info(f"[OK] Sign-in sessions revoked for: {user_upn} (account still active)")
+
+        # Clear user from cache
+        user_cache.delete(user_upn)
+
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to perform soft block for {user_upn}: {e}")
+        raise AccountRevocationException(
+            f"Failed to revoke sessions",
+            details={
+                "upn": user_upn,
+                "error": str(e)
+            },
+            original_exception=e
+        )
+
 async def perform_hard_block(user_upn: str) -> bool:
     """
-    Revoke sign-in sessions and disable user account.
+    Revoke sign-in sessions and disable user account (CRITICAL risk - Hard Block).
 
     This is a destructive operation that:
     1. Revokes all active sign-in sessions
@@ -143,15 +168,15 @@ async def perform_hard_block(user_upn: str) -> bool:
 
     try:
         # Step 1: Revoke sign-in sessions
-        logger.info(f"Revoking sign-in sessions for: {user_upn}")
+        logger.info(f"[HARD BLOCK] Revoking sign-in sessions for: {user_upn}")
         await client.users.by_user_id(user_upn).revoke_sign_in_sessions().post()
         logger.info(f"[OK] Sign-in sessions revoked for: {user_upn}")
 
         # Step 2: Disable the account
-        logger.info(f"Disabling account for: {user_upn}")
+        logger.info(f"[HARD BLOCK] Disabling account for: {user_upn}")
         patch_body = {"accountEnabled": False}
         await client.users.by_user_id(user_upn).patch(patch_body)
-        logger.info(f"[OK] Account disabled for: {user_upn}")
+        logger.info(f"[OK] Account DISABLED for: {user_upn} (cannot re-login)")
 
         # Clear user from cache (their details are now outdated)
         user_cache.delete(user_upn)
