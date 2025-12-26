@@ -39,20 +39,14 @@ from sqlalchemy import text
 
 # Modules
 from models import (
-    EmailCheckRequest,
-    EmailCheckResponse,
     RemediationRequest,
-    RemediationResponse,
-    HealthCheckResponse,
-    RiskLevel,
-    ViolationType
+    HealthCheckResponse
 )
 from exceptions import (
     DLPEngineException,
     UserNotFoundException,
     GraphAPIException,
-    DatabaseException,
-    EmailSendException
+    DatabaseException
 )
 from middleware import (
     RequestIDMiddleware,
@@ -60,7 +54,6 @@ from middleware import (
     RequestSizeLimitMiddleware,
     SecurityHeadersMiddleware
 )
-from sensitive_data import SensitiveDataDetector
 from database import (
     create_db_and_tables,
     SessionLocal,
@@ -3472,224 +3465,6 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
             {"ok": False, "message": f"Remediation error: {str(e)}"},
             status_code=500
         )
-
-@app.post("/check-email", response_model=EmailCheckResponse)
-async def check_email(request: EmailCheckRequest, db: Session = Depends(get_db)):
-    """
-    Check email content for sensitive data
-
-    Validates email content against DLP policies and logs violations
-    """
-    try:
-        logger.info(f"Checking email from {request.sender}")
-
-        # Use centralized sensitive data detector
-        detection_result = SensitiveDataDetector.check_sensitive_content(request.content)
-
-        if detection_result["has_sensitive_data"]:
-            # Log offense and get count in single transaction
-            offense, violation_count = log_offense_and_get_count(
-                db,
-                request.sender,
-                "Email blocked - Sensitive data detected"
-            )
-
-            # Determine risk level based on count
-            if violation_count >= settings.CRITICAL_VIOLATION_THRESHOLD:
-                risk_level = RiskLevel.CRITICAL
-                action_required = "revoke_signin"
-            elif violation_count >= settings.WARNING_VIOLATION_THRESHOLD:
-                risk_level = RiskLevel.HIGH
-                action_required = "warning"
-            else:
-                risk_level = RiskLevel.MEDIUM
-                action_required = "educate"
-
-            # Send email notification if enabled
-            if EMAIL_ENABLED and email_service:
-                try:
-                    await email_service.send_violation_notification(
-                        recipient=request.sender,
-                        violation_types=detection_result["violation_types"],
-                        violation_count=violation_count,
-                        blocked_content_summary=SensitiveDataDetector.mask_sensitive_data(request.content[:200])
-                    )
-                    logger.info(f"[OK] Email notification sent to {request.sender}")
-                except EmailSendException as e:
-                    logger.error(f"Failed to send email: {e}")
-
-            return EmailCheckResponse(
-                status="blocked",
-                has_sensitive_data=True,
-                violation_types=[ViolationType(v) for v in detection_result["violation_types"]],
-                violation_count=violation_count,
-                risk_level=risk_level,
-                action_required=action_required,
-                masked_content=SensitiveDataDetector.mask_sensitive_data(request.content),
-                message=f"Email blocked - {len(detection_result['violation_types'])} sensitive data types detected"
-            )
-
-        return EmailCheckResponse(
-            status="allowed",
-            has_sensitive_data=False,
-            violation_types=[],
-            violation_count=0,
-            risk_level=RiskLevel.LOW,
-            action_required="none",
-            message="No sensitive data detected"
-        )
-
-    except Exception as e:
-        logger.error(f"Email check error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/remediate", response_model=RemediationResponse)
-async def remediate_endpoint(request: Request, db: Session = Depends(get_db)):
-    """
-    Process Sentinel incident and perform remediation
-
-    Called by Logic App when DLP incident is detected
-    """
-    try:
-        logger.info("=" * 80)
-        logger.info("NEW INCIDENT RECEIVED FROM LOGIC APP")
-
-        incident_payload = await request.json()
-        parsed_incident = SentinelIncidentParser.parse(incident_payload)
-
-        user_upn = parsed_incident["user_upn"]
-        if not user_upn:
-            raise HTTPException(status_code=400, detail="User UPN not found in payload")
-
-        # Get user details with caching
-        user_details = await get_user_details(user_upn)
-        if not user_details:
-            user_details = {
-                "displayName": "Unknown",
-                "department": "Unknown",
-                "jobTitle": "Unknown"
-            }
-
-        # Log offense and get count in single transaction
-        offense, offense_count = log_offense_and_get_count(
-            db,
-            user_upn,
-            parsed_incident["incident_title"]
-        )
-
-        # Create contexts for decision engine
-        incident_ctx = IncidentContext(severity=parsed_incident["severity"])
-        user_ctx = UserContext(department=user_details.get("department", "Unknown"))
-        file_ctx = FileContext(sensitivity_label=parsed_incident["file_sensitivity"])
-        offense_hist = OffenseHistory(previous_offenses=offense_count - 1)  # -1 because we just logged
-
-        # Assess risk
-        assessment = decision_engine.assess_risk(incident_ctx, user_ctx, file_ctx, offense_hist)
-
-        if not assessment:
-            raise HTTPException(status_code=500, detail="Risk assessment failed")
-
-        # Determine actions based on thresholds
-        should_revoke = offense_count >= settings.CRITICAL_VIOLATION_THRESHOLD
-        send_socialization = offense_count in settings.SOCIALIZATION_THRESHOLDS
-
-        # Detect violation types from content
-        violation_types = ["Sensitive Data"]  # Default
-
-        # Send email notification
-        email_sent = False
-        if EMAIL_ENABLED and email_service:
-            try:
-                logger.info(f"📧 Sending email notification to {user_upn}")
-                result = await email_service.send_violation_notification(
-                    recipient=user_upn,
-                    violation_types=violation_types,
-                    violation_count=offense_count,
-                    blocked_content_summary=parsed_incident.get("incident_title"),
-                    incident_title=parsed_incident["incident_title"],
-                    file_name=parsed_incident.get("file_name")
-                )
-                email_sent = result
-                logger.info(f"[OK] Email notification sent: {email_sent}")
-            except Exception as e:
-                logger.error(f"[ERROR] Email notification failed: {e}", exc_info=True)
-
-        # Send socialization email if threshold reached
-        socialization_sent = False
-        if EMAIL_ENABLED and send_socialization and email_service:
-            try:
-                await email_service.send_socialization_invitation(user_upn, offense_count)
-                socialization_sent = True
-                logger.info(f"[OK] Socialization email sent to {user_upn}")
-            except Exception as e:
-                logger.error(f"Failed to send socialization email: {e}")
-
-        # Revoke account if threshold reached
-        account_revoked = False
-        if should_revoke and settings.FEATURE_ACCOUNT_REVOCATION:
-            logger.info(f"[CRITICAL] User has {offense_count} violations - triggering account revocation")
-            try:
-                revoke_result = await perform_hard_block(user_upn)
-                account_revoked = revoke_result
-                logger.info(f"[OK] Account revoked: {account_revoked}")
-            except Exception as e:
-                logger.error(f"[ERROR] Account revocation failed: {e}", exc_info=True)
-
-        # Send admin alert if high risk
-        admin_notified = False
-        if EMAIL_ENABLED and offense_count >= settings.CRITICAL_VIOLATION_THRESHOLD and email_service:
-            try:
-                await email_service.send_admin_alert(
-                    user=user_upn,
-                    incident_title=parsed_incident["incident_title"],
-                    violation_count=offense_count,
-                    action_taken="Account Revoked" if account_revoked else "Warning Sent",
-                    violation_types=violation_types,
-                    file_name=parsed_incident.get("file_name")
-                )
-                admin_notified = True
-                logger.info(f"[OK] Admin alert sent for {user_upn}")
-            except Exception as e:
-                logger.error(f"Failed to send admin alert: {e}")
-
-        # Build response
-        response = RemediationResponse(
-            request_id=parsed_incident["incident_id"],
-            timestamp=datetime.utcnow(),
-            user=user_upn,
-            user_details={
-                "display_name": user_details.get("displayName", "Unknown"),
-                "department": user_details.get("department", "Unknown"),
-                "job_title": user_details.get("jobTitle", "Unknown")
-            },
-            assessment={
-                "risk_score": assessment.score,
-                "risk_level": assessment.risk_level,
-                "remediation_action": assessment.remediation_action,
-                "confidence": 0.95,
-                "escalation_required": assessment.risk_level in ["High", "Critical"]
-            },
-            offense_count=offense_count,
-            violation_types=violation_types,
-            actions_taken={
-                "email_blocked": True,
-                "account_revoked": account_revoked,
-                "email_notification_sent": email_sent,
-                "socialization_sent": socialization_sent,
-                "admin_notified": admin_notified
-            },
-            status="processed",
-            message=f"Violation processed. User has {offense_count} total violations."
-        )
-
-        logger.info(f"[OK] Incident processed for {user_upn}: {offense_count} violations")
-        return response
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error processing incident: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/webhook/test")
 async def test_webhook():
