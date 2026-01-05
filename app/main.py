@@ -313,6 +313,44 @@ async def root():
                 overflow-y: auto;
             }
 
+            /* Dark theme for select dropdowns */
+            select {
+                background: rgba(0, 0, 0, 0.5) !important;
+                border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                color: #ffffff !important;
+                appearance: none;
+                -webkit-appearance: none;
+                -moz-appearance: none;
+                background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e") !important;
+                background-repeat: no-repeat !important;
+                background-position: right 0.5rem center !important;
+                background-size: 1.25em 1.25em !important;
+                padding-right: 2.5rem !important;
+            }
+
+            select:hover {
+                border-color: rgba(255, 255, 255, 0.3) !important;
+                background: rgba(0, 0, 0, 0.7) !important;
+            }
+
+            select:focus {
+                outline: none !important;
+                border-color: #667eea !important;
+                box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1) !important;
+            }
+
+            select option {
+                background: #1a1a1a !important;
+                color: #ffffff !important;
+                padding: 10px !important;
+            }
+
+            select option:hover,
+            select option:checked {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+                color: #ffffff !important;
+            }
+
             html {
                 overflow-x: hidden;
             }
@@ -381,9 +419,21 @@ async def root():
             }
             .grid {
                 display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-                gap: 2rem;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 1.5rem;
                 margin-bottom: 3rem;
+            }
+
+            @media (max-width: 1400px) {
+                .grid {
+                    grid-template-columns: repeat(2, 1fr);
+                }
+            }
+
+            @media (max-width: 768px) {
+                .grid {
+                    grid-template-columns: 1fr;
+                }
             }
 
             .card {
@@ -1030,20 +1080,6 @@ async def root():
 
         <div class="main-wrapper" id="mainWrapper">
         <div class="container">
-            <div class="header">
-                <h1>
-                    <svg viewBox="0 0 24 24" width="48" height="48" stroke="currentColor" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 12px;">
-                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                    </svg>
-                    DLP Remediation Engine
-                </h1>
-                <p>Enterprise-Grade Data Loss Prevention & Automated Remediation</p>
-                <div class="status-badge" id="status">
-                    <span>●</span>
-                    <span>System Online</span>
-                </div>
-            </div>
-
             <!-- Statistics Cards -->
             <div class="grid">
                 <div class="card">
@@ -1109,7 +1145,7 @@ async def root():
             <!-- Charts Row -->
             <div class="charts-row">
                 <div class="chart-card">
-                    <div class="chart-header">
+                    <div class="chart-header" style="flex-wrap: wrap; gap: 12px;">
                         <h3 class="chart-title">
                             <svg viewBox="0 0 24 24" width="20" height="20" stroke="currentColor" stroke-width="2" fill="none" style="display: inline-block; vertical-align: middle; margin-right: 8px;">
                                 <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
@@ -1117,7 +1153,21 @@ async def root():
                             </svg>
                             Violation Trend
                         </h3>
-                        <div class="chart-badge">LAST 30 DAYS</div>
+                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                            <select id="periodSelect" onchange="updatePeriodFilter()" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 8px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; min-width: 140px; transition: all 0.2s;">
+                                <option value="all">All Time</option>
+                                <option value="today">Today</option>
+                                <option value="week">Last 7 Days</option>
+                                <option value="month">Last 30 Days</option>
+                                <option value="custom">Custom Range</option>
+                            </select>
+                            <div id="customDateRange" style="display: none; gap: 8px; align-items: center;">
+                                <input type="date" id="startDate" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 8px 12px; border-radius: 8px; font-size: 13px;">
+                                <span style="color: #71717a;">to</span>
+                                <input type="date" id="endDate" style="background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.15); color: #a1a1aa; padding: 8px 12px; border-radius: 8px; font-size: 13px;">
+                                <button onclick="applyCustomDateFilter()" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 8px 16px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s; font-size: 13px;">Apply</button>
+                            </div>
+                        </div>
                     </div>
                     <div style="flex: 1; position: relative; max-height: 300px;">
                         <canvas id="trendChart"></canvas>
@@ -1176,11 +1226,12 @@ async def root():
                                 <th>ID</th>
                                 <th>User</th>
                                 <th>Incident</th>
+                                <th>Attack Type</th>
                                 <th>Time</th>
                             </tr>
                         </thead>
                         <tbody id="incidents-table">
-                            <tr><td colspan="4" style="text-align: center; padding: 3rem; color: #52525b;">Loading incidents...</td></tr>
+                            <tr><td colspan="5" style="text-align: center; padding: 3rem; color: #52525b;">Loading incidents...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -1206,17 +1257,45 @@ async def root():
         <script>
             let trendChart = null;
             let typeChart = null;
+            let currentDateFilter = { period: 'all', start_date: null, end_date: null };
+
+            // Date filter functions
+            function updatePeriodFilter() {
+                const period = document.getElementById('periodSelect').value;
+                const customRange = document.getElementById('customDateRange');
+
+                if (period === 'custom') {
+                    customRange.style.display = 'flex';
+                } else {
+                    customRange.style.display = 'none';
+                    currentDateFilter = { period: period, start_date: null, end_date: null };
+                    loadDashboardData();
+                }
+            }
+
+            function applyCustomDateFilter() {
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+
+                if (startDate && endDate) {
+                    currentDateFilter = { period: 'custom', start_date: startDate, end_date: endDate };
+                    loadDashboardData();
+                } else {
+                    alert('Please select both start and end dates');
+                }
+            }
 
             async function loadDashboardData() {
                 try {
-                    // Update status badge
-                    document.getElementById('status').textContent = '● Online';
-                    document.getElementById('status').style.background = 'rgba(34, 197, 94, 0.1)';
-                    document.getElementById('status').style.borderColor = 'rgba(34, 197, 94, 0.3)';
-                    document.getElementById('status').style.color = '#22c55e';
+                    // Build query params with date filter
+                    let params = new URLSearchParams();
+                    if (currentDateFilter.period) params.append('period', currentDateFilter.period);
+                    if (currentDateFilter.start_date) params.append('start_date', currentDateFilter.start_date);
+                    if (currentDateFilter.end_date) params.append('end_date', currentDateFilter.end_date);
+                    const queryString = params.toString() ? '?' + params.toString() : '';
 
-                    // Load statistics
-                    const statsResponse = await fetch('/api/statistics');
+                    // Load statistics with date filter
+                    const statsResponse = await fetch('/api/statistics' + queryString);
                     const stats = await statsResponse.json();
 
                     document.getElementById('total-violations').textContent = stats.total_violations || 0;
@@ -1225,25 +1304,23 @@ async def root():
                     document.getElementById('high-risk-users').textContent = stats.high_risk_users || 0;
 
                     // Load trend data and create chart
-                    const trendResponse = await fetch('/api/violations/trend?days=30');
+                    const trendResponse = await fetch('/api/violations/trend?days=30' + (queryString ? '&' + params.toString() : ''));
                     const trendData = await trendResponse.json();
                     createTrendChart(trendData);
 
-                    // Load violation types and create chart
-                    const typesResponse = await fetch('/api/violations/by-type');
+                    // Load violation types and create chart with date filter
+                    const typesResponse = await fetch('/api/violations/by-type' + queryString);
                     const typesData = await typesResponse.json();
                     createTypeChart(typesData);
 
-                    // Load recent incidents (limited to 8 to prevent layout breaking)
-                    const incidentsResponse = await fetch('/api/violations/recent?limit=8');
+                    // Load recent incidents with date filter (limited to 8)
+                    const incidentsResponse = await fetch('/api/violations/recent?limit=8' + (queryString ? '&' + params.toString() : ''));
                     const incidents = await incidentsResponse.json();
                     displayIncidents(incidents);
 
                 } catch (error) {
-                    document.getElementById('status').textContent = '● Error Loading';
-                    document.getElementById('status').style.background = 'rgba(239, 68, 68, 0.1)';
-                    document.getElementById('status').style.color = '#ef4444';
                     console.error('Error loading dashboard:', error);
+                    alert('Error loading dashboard data. Please refresh the page.');
                 }
             }
 
@@ -1432,11 +1509,27 @@ async def root():
                 const tbody = document.getElementById('incidents-table');
 
                 if (!incidents || incidents.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; padding: 3rem; color: #52525b;">No incidents found</td></tr>';
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 3rem; color: #52525b;">No incidents found</td></tr>';
                     return;
                 }
 
-                const rows = incidents.map(inc => `
+                const rows = incidents.map(inc => {
+                    // Detect attack type from incident title
+                    let attackType = 'Unknown';
+                    let attackColor = '#71717a';
+
+                    if (inc.incident_title.includes('KTP') || inc.incident_title.includes('NIK')) {
+                        attackType = 'KTP/NIK';
+                        attackColor = '#60a5fa';
+                    } else if (inc.incident_title.includes('NPWP')) {
+                        attackType = 'NPWP';
+                        attackColor = '#10b981';
+                    } else if (inc.incident_title.includes('Employee')) {
+                        attackType = 'Employee ID';
+                        attackColor = '#f59e0b';
+                    }
+
+                    return `
                     <tr onclick="window.location.href='/incident/${inc.id}'" style="cursor: pointer;">
                         <td style="font-family: 'Courier New', monospace; font-weight: 700; color: #9ca3af;">
                             <a href="/incident/${inc.id}" style="color: #9ca3af; text-decoration: none; display: block;">
@@ -1444,16 +1537,24 @@ async def root():
                             </a>
                         </td>
                         <td style="color: #ffffff; font-weight: 600;">${inc.user}</td>
-                        <td style="color: #a1a1aa; max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${inc.incident_title}</td>
+                        <td style="color: #a1a1aa; max-width: 400px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${inc.incident_title}</td>
+                        <td>
+                            <span style="background: ${attackColor}22; color: ${attackColor}; padding: 6px 14px; border-radius: 8px; font-size: 0.875rem; font-weight: 700; border: 1px solid ${attackColor}44; display: inline-block;">
+                                ${attackType}
+                            </span>
+                        </td>
                         <td style="color: #71717a; font-weight: 600;">${inc.time_ago}</td>
                     </tr>
-                `).join('');
+                `;
+                }).join('');
 
                 tbody.innerHTML = rows;
             }
 
             // Load dashboard on page load
-            loadDashboardData();
+            window.addEventListener('DOMContentLoaded', function() {
+                loadDashboardData();
+            });
 
             // Manual refresh available via the "Refresh" button in the UI
             // Removed auto-refresh to prevent performance issues and excessive API calls
@@ -1488,40 +1589,80 @@ async def root():
     """
 
 @app.get("/api/statistics")
-async def get_statistics(db: Session = Depends(get_db)):
-    """Get dashboard statistics"""
+async def get_statistics(
+    period: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db)
+):
+    """Get dashboard statistics with date filtering"""
     try:
         from datetime import datetime, timedelta
         from sqlalchemy import func, cast, Date
         from database import Offense
 
+        # Jakarta timezone
+        jakarta_tz = timedelta(hours=7)
         now = datetime.utcnow()
+        now_jakarta = now + jakarta_tz
+
+        # Calculate date range based on period or custom dates
+        if start_date and end_date:
+            filter_start = datetime.strptime(start_date, "%Y-%m-%d") - jakarta_tz
+            filter_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - jakarta_tz
+        elif period == "today":
+            today = now_jakarta.date()
+            filter_start = datetime.combine(today, datetime.min.time()) - jakarta_tz
+            filter_end = datetime.combine(today, datetime.max.time()) - jakarta_tz
+        elif period == "week":
+            filter_start = (now_jakarta - timedelta(days=7)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now - jakarta_tz
+        elif period == "month":
+            filter_start = (now_jakarta - timedelta(days=30)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now - jakarta_tz
+        else:  # "all"
+            filter_start = None
+            filter_end = None
+
+        # Base query with optional date filter
+        base_query = db.query(Offense)
+        if filter_start and filter_end:
+            base_query = base_query.filter(
+                Offense.timestamp >= filter_start,
+                Offense.timestamp <= filter_end
+            )
+
+        # Total violations (filtered)
+        total_violations = base_query.count() or 0
+
+        # Today's violations (always today, not filtered)
         today_start = datetime(now.year, now.month, now.day)
-        week_ago = now - timedelta(days=7)
-        month_ago = now - timedelta(days=30)
-
-        # Total violations
-        total_violations = db.query(func.count(Offense.id)).scalar() or 0
-
-        # Today's violations
         today_violations = db.query(func.count(Offense.id))\
             .filter(Offense.timestamp >= today_start)\
             .scalar() or 0
 
         # This week's violations
+        week_ago = now - timedelta(days=7)
         week_violations = db.query(func.count(Offense.id))\
             .filter(Offense.timestamp >= week_ago)\
             .scalar() or 0
 
-        # Unique users with violations
-        total_users = db.query(func.count(func.distinct(Offense.user_principal_name)))\
+        # This month's violations
+        month_ago = now - timedelta(days=30)
+
+        # Unique users with violations (filtered)
+        total_users = base_query.with_entities(func.count(func.distinct(Offense.user_principal_name)))\
             .scalar() or 0
 
-        # High risk users (3+ violations)
-        high_risk_users = db.query(Offense.user_principal_name)\
-            .group_by(Offense.user_principal_name)\
-            .having(func.count(Offense.id) >= 3)\
-            .count()
+        # High risk users (3+ violations) - from filtered data
+        high_risk_subquery = base_query.with_entities(
+            Offense.user_principal_name,
+            func.count(Offense.id).label('offense_count')
+        ).group_by(Offense.user_principal_name).subquery()
+
+        high_risk_users = db.query(high_risk_subquery).filter(
+            high_risk_subquery.c.offense_count >= 3
+        ).count()
 
         # Users with violations today
         active_users_today = db.query(func.count(func.distinct(Offense.user_principal_name)))\
@@ -1574,23 +1715,57 @@ async def get_recent_violations(limit: int = 20, db: Session = Depends(get_db)):
         return []
 
 @app.get("/api/violations/trend")
-async def get_violation_trend(days: int = 30, db: Session = Depends(get_db)):
-    """Get violation trend data for charts"""
+async def get_violation_trend(
+    days: int = 30,
+    period: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db)
+):
+    """Get violation trend data for charts with date filtering support"""
     try:
         from datetime import datetime, timedelta
         from sqlalchemy import func, cast, Date
         from database import Offense
 
-        end_date = datetime.utcnow()
-        start_date = end_date - timedelta(days=days)
+        # Jakarta timezone offset
+        jakarta_tz = timedelta(hours=7)
+        now = datetime.utcnow()
+        now_jakarta = now + jakarta_tz
+
+        # Calculate date range based on period or custom dates
+        if start_date and end_date:
+            filter_start = datetime.strptime(start_date, "%Y-%m-%d") - jakarta_tz
+            filter_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - jakarta_tz
+        elif period == "today":
+            today = now_jakarta.date()
+            filter_start = datetime.combine(today, datetime.min.time()) - jakarta_tz
+            filter_end = datetime.combine(today, datetime.max.time()) - jakarta_tz
+        elif period == "week":
+            filter_start = now - timedelta(days=7)
+            filter_end = now
+        elif period == "month":
+            filter_start = now - timedelta(days=30)
+            filter_end = now
+        else:  # "all" or default
+            filter_end = now
+            filter_start = filter_end - timedelta(days=days)
 
         # Group violations by date
-        daily_counts = db.query(
+        base_query = db.query(
             cast(Offense.timestamp, Date).label('date'),
             func.count(Offense.id).label('count')
-        ).filter(
-            Offense.timestamp >= start_date
-        ).group_by(
+        )
+
+        if period != "all" or (start_date and end_date):
+            base_query = base_query.filter(
+                Offense.timestamp >= filter_start,
+                Offense.timestamp <= filter_end
+            )
+        else:
+            base_query = base_query.filter(Offense.timestamp >= filter_start)
+
+        daily_counts = base_query.group_by(
             cast(Offense.timestamp, Date)
         ).order_by('date').all()
 
@@ -1598,8 +1773,8 @@ async def get_violation_trend(days: int = 30, db: Session = Depends(get_db)):
         date_dict = {item.date.isoformat(): item.count for item in daily_counts}
 
         result = []
-        current = start_date.date()
-        while current <= end_date.date():
+        current = filter_start.date()
+        while current <= filter_end.date():
             result.append({
                 "date": current.isoformat(),
                 "count": date_dict.get(current.isoformat(), 0)
@@ -1612,13 +1787,50 @@ async def get_violation_trend(days: int = 30, db: Session = Depends(get_db)):
         return []
 
 @app.get("/api/violations/by-type")
-async def get_violations_by_type(db: Session = Depends(get_db)):
-    """Get violations grouped by type"""
+async def get_violations_by_type(
+    period: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db)
+):
+    """Get violations grouped by type with date filtering"""
     try:
         from database import Offense
         from collections import Counter
+        from datetime import timedelta
 
-        violations = db.query(Offense.incident_title).all()
+        # Jakarta timezone and date filtering logic
+        jakarta_tz = timedelta(hours=7)
+        now = datetime.utcnow()
+        now_jakarta = now + jakarta_tz
+
+        # Calculate date range
+        if start_date and end_date:
+            filter_start = datetime.strptime(start_date, "%Y-%m-%d") - jakarta_tz
+            filter_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - jakarta_tz
+        elif period == "today":
+            today = now_jakarta.date()
+            filter_start = datetime.combine(today, datetime.min.time()) - jakarta_tz
+            filter_end = datetime.combine(today, datetime.max.time()) - jakarta_tz
+        elif period == "week":
+            filter_start = (now_jakarta - timedelta(days=7)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now - jakarta_tz
+        elif period == "month":
+            filter_start = (now_jakarta - timedelta(days=30)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now - jakarta_tz
+        else:  # "all"
+            filter_start = None
+            filter_end = None
+
+        # Base query with optional date filter
+        query = db.query(Offense.incident_title)
+        if filter_start and filter_end:
+            query = query.filter(
+                Offense.timestamp >= filter_start,
+                Offense.timestamp <= filter_end
+            )
+
+        violations = query.all()
 
         # Extract violation types from incident titles
         type_counts = Counter()

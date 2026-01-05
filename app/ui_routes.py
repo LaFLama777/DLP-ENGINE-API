@@ -249,61 +249,99 @@ def get_base_html_head(title: str) -> str:
     """
 
 
-@router.get("/", response_class=HTMLResponse)
-async def dashboard(db: Session = Depends(get_db)):
-    """Main dashboard with statistics and charts"""
+@router.get("/ui/dashboard-alt", response_class=HTMLResponse)
+async def dashboard(
+    db: Session = Depends(get_db),
+    start_date: str = Query(None),
+    end_date: str = Query(None),
+    period: str = Query("all", regex="^(all|month|week|today)$")
+):
+    """Alternative dashboard - Simple UI"""
     try:
-        total_incidents = db.query(Offense).count()
-        unique_users = db.query(Offense.user_principal_name).distinct().count()
-        
-        # Today's incidents (Jakarta timezone)
+        # Calculate date range based on period or custom dates
         jakarta_tz = timedelta(hours=7)
         now_jakarta = datetime.utcnow() + jakarta_tz
+
+        if start_date and end_date:
+            # Custom date range
+            filter_start = datetime.strptime(start_date, "%Y-%m-%d") - jakarta_tz
+            filter_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - jakarta_tz
+        elif period == "today":
+            today = now_jakarta.date()
+            filter_start = datetime.combine(today, datetime.min.time()) - jakarta_tz
+            filter_end = datetime.combine(today, datetime.max.time()) - jakarta_tz
+        elif period == "week":
+            filter_start = (now_jakarta - timedelta(days=7)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now_jakarta - jakarta_tz
+        elif period == "month":
+            filter_start = (now_jakarta - timedelta(days=30)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now_jakarta - jakarta_tz
+        else:  # "all"
+            filter_start = None
+            filter_end = None
+
+        # Base query with optional date filter
+        base_query = db.query(Offense)
+        if filter_start and filter_end:
+            base_query = base_query.filter(
+                Offense.timestamp >= filter_start,
+                Offense.timestamp <= filter_end
+            )
+
+        total_incidents = base_query.count()
+        unique_users = base_query.with_entities(Offense.user_principal_name).distinct().count()
+
+        # Today's incidents (Jakarta timezone)
         today = now_jakarta.date()
         today_utc_start = datetime.combine(today, datetime.min.time()) - jakarta_tz
         today_utc_end = datetime.combine(today, datetime.max.time()) - jakarta_tz
-        today_incidents = db.query(Offense).filter(
+        today_query = db.query(Offense).filter(
             Offense.timestamp >= today_utc_start,
             Offense.timestamp <= today_utc_end
-        ).count()
-        
+        )
+        today_incidents = today_query.count()
+
         # High risk users (>=3 violations)
-        high_risk_users = db.query(
+        high_risk_subquery = base_query.with_entities(
             Offense.user_principal_name,
             func.count(Offense.id).label('offense_count')
-        ).group_by(Offense.user_principal_name).having(
-            func.count(Offense.id) >= 3
+        ).group_by(Offense.user_principal_name).subquery()
+
+        high_risk_users = db.query(high_risk_subquery).filter(
+            high_risk_subquery.c.offense_count >= 3
         ).count()
-        
-        # Recent incidents
-        recent_incidents = db.query(Offense).order_by(
+
+        # Recent incidents (from filtered data)
+        recent_incidents = base_query.order_by(
             desc(Offense.timestamp)
         ).limit(10).all()
-        
-        # Monthly data for chart
-        monthly_data = db.query(
+
+        # Monthly data for chart (from filtered data)
+        monthly_data = base_query.with_entities(
             func.extract('month', Offense.timestamp).label('month'),
             func.count(Offense.id).label('count')
         ).group_by('month').order_by('month').all()
-        
-        # Violation type counts
-        ktp_count = db.query(Offense).filter(
+
+        # Violation type counts (from filtered data)
+        ktp_count = base_query.filter(
             Offense.incident_title.contains('KTP')
         ).count()
-        npwp_count = db.query(Offense).filter(
+        npwp_count = base_query.filter(
             Offense.incident_title.contains('NPWP')
         ).count()
-        emp_id_count = db.query(Offense).filter(
+        emp_id_count = base_query.filter(
             Offense.incident_title.contains('Employee')
         ).count()
         other_count = total_incidents - (ktp_count + npwp_count + emp_id_count)
-        
+
     except Exception as e:
         logger.error(f"Dashboard error: {e}")
         total_incidents = unique_users = today_incidents = high_risk_users = 0
         recent_incidents = []
         monthly_data = []
         ktp_count = npwp_count = emp_id_count = other_count = 0
+        period = "all"
+        start_date = end_date = None
     
     # Prepare monthly chart data
     months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
@@ -312,19 +350,36 @@ async def dashboard(db: Session = Depends(get_db)):
         if month and 1 <= int(month) <= 12:
             monthly_counts[int(month) - 1] = count
     
-    # Build recent incidents HTML
+    # Build recent incidents HTML with attack types
     recent_html = ""
     if recent_incidents:
         for inc in recent_incidents[:5]:
             timestamp_wib = (inc.timestamp + timedelta(hours=7)).strftime("%Y-%m-%d %H:%M:%S")
+
+            # Determine attack type based on incident title
+            attack_type = "Unknown"
+            attack_color = "#6b7280"
+            if "KTP" in inc.incident_title or "NIK" in inc.incident_title:
+                attack_type = "KTP/NIK"
+                attack_color = "#60a5fa"
+            elif "NPWP" in inc.incident_title:
+                attack_type = "NPWP"
+                attack_color = "#10b981"
+            elif "Employee" in inc.incident_title:
+                attack_type = "Employee ID"
+                attack_color = "#f59e0b"
+
             recent_html += f'''
             <div style="background: #000000; border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 16px; margin-bottom: 12px; transition: all 0.2s;" onmouseover="this.style.borderColor='#60a5fa'; this.style.transform='translateX(4px)'" onmouseout="this.style.borderColor='rgba(255, 255, 255, 0.1)'; this.style.transform='translateX(0)'">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                     <div style="font-size: 14px; font-weight: 500; color: #e4e6eb; flex: 1;">{inc.incident_title}</div>
                     <span style="padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; background: rgba(239, 68, 68, 0.2); color: #f87171;">HIGH</span>
                 </div>
-                <div style="font-size: 12px; color: #9ca3af;">
+                <div style="font-size: 12px; color: #9ca3af; margin-bottom: 8px;">
                     <strong>User:</strong> {inc.user_principal_name} • <strong>Time:</strong> {timestamp_wib} WIB
+                </div>
+                <div style="display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600; background: {attack_color}22; color: {attack_color};">
+                    Attack Type: {attack_type}
                 </div>
             </div>
             '''
@@ -342,19 +397,37 @@ async def dashboard(db: Session = Depends(get_db)):
             <a href="/ui/health" class="nav-item">Health Check</a>
             <a href="/ui/stats" class="nav-item">Statistics</a>
         </div>
-        
+
         <div class="main-content">
             <div class="top-bar">
-                <div>
-                    <h2 style="font-size: 24px; font-weight: 700; margin-bottom: 4px;">Security Dashboard</h2>
-                    <p style="color: #9ca3af; font-size: 14px;">Monitor and manage DLP incidents in real-time</p>
-                </div>
                 <div class="status-badge">
                     <div class="status-dot"></div>
                     System Online
                 </div>
             </div>
-            
+
+            <!-- Date Filter Section -->
+            <div class="filter-bar">
+                <div style="display: flex; gap: 10px; align-items: center; flex: 1;">
+                    <span style="color: #9ca3af; font-size: 14px; font-weight: 500;">Period:</span>
+                    <select id="periodSelect" onchange="updatePeriod()" style="flex: 0 0 auto; min-width: 120px;">
+                        <option value="all" {'selected' if period == 'all' else ''}>All Time</option>
+                        <option value="today" {'selected' if period == 'today' else ''}>Today</option>
+                        <option value="week" {'selected' if period == 'week' else ''}>Last 7 Days</option>
+                        <option value="month" {'selected' if period == 'month' else ''}>Last 30 Days</option>
+                        <option value="custom">Custom Range</option>
+                    </select>
+                    <div id="customDateRange" style="display: {'flex' if start_date and end_date else 'none'}; gap: 10px; align-items: center;">
+                        <input type="date" id="startDate" value="{start_date or ''}" style="flex: 0 0 auto;">
+                        <span style="color: #9ca3af;">to</span>
+                        <input type="date" id="endDate" value="{end_date or ''}" style="flex: 0 0 auto;">
+                        <button onclick="applyDateFilter()" style="background: #60a5fa; color: white; padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                            Apply Filter
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <div class="stats-grid">
                 <div class="stat-card">
                     <div class="stat-label">Total Incidents</div>
@@ -451,13 +524,13 @@ async def dashboard(db: Session = Depends(get_db)):
                     }}
                 }});
             }}
-            
+
             const violationCtx = document.getElementById('violationChart');
             if (violationCtx) {{
                 new Chart(violationCtx, {{
                     type: 'doughnut',
                     data: {{
-                        labels: ['KTP', 'NPWP', 'Employee ID', 'Other'],
+                        labels: ['KTP/NIK', 'NPWP', 'Employee ID', 'Other'],
                         datasets: [{{
                             data: [{ktp_count}, {npwp_count}, {emp_id_count}, {other_count}],
                             backgroundColor: ['#60a5fa', '#10b981', '#f59e0b', '#ef4444'],
@@ -487,6 +560,41 @@ async def dashboard(db: Session = Depends(get_db)):
                     }}
                 }});
             }}
+
+            // Date filter functionality
+            function updatePeriod() {{
+                const period = document.getElementById('periodSelect').value;
+                const customRange = document.getElementById('customDateRange');
+
+                if (period === 'custom') {{
+                    customRange.style.display = 'flex';
+                }} else {{
+                    customRange.style.display = 'none';
+                    if (period !== 'custom') {{
+                        window.location.href = '/?period=' + period;
+                    }}
+                }}
+            }}
+
+            function applyDateFilter() {{
+                const startDate = document.getElementById('startDate').value;
+                const endDate = document.getElementById('endDate').value;
+
+                if (startDate && endDate) {{
+                    window.location.href = `/?start_date=${{startDate}}&end_date=${{endDate}}`;
+                }} else {{
+                    alert('Please select both start and end dates');
+                }}
+            }}
+
+            // Show custom date range if dates are present
+            window.addEventListener('DOMContentLoaded', function() {{
+                const urlParams = new URLSearchParams(window.location.search);
+                if (urlParams.get('start_date') && urlParams.get('end_date')) {{
+                    document.getElementById('periodSelect').value = 'custom';
+                    document.getElementById('customDateRange').style.display = 'flex';
+                }}
+            }});
         </script>
     </body>
     </html>

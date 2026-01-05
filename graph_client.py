@@ -117,7 +117,7 @@ async def perform_soft_block(user_upn: str) -> bool:
     try:
         # Revoke sign-in sessions only (account stays enabled)
         logger.info(f"[SOFT BLOCK] Revoking sign-in sessions for: {user_upn}")
-        await client.users.by_user_id(user_upn).revoke_sign_in_sessions().post()
+        await client.users.by_user_id(user_upn).revoke_sign_in_sessions.post()
         logger.info(f"[OK] Sign-in sessions revoked for: {user_upn} (account still active)")
 
         # Clear user from cache
