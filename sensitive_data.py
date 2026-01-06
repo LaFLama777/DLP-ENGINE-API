@@ -32,13 +32,17 @@ class SensitiveDataDetector:
 
     # Regex patterns as class constants for easy modification
     KTP_PATTERN = r'\b\d{16}\b'
-    NPWP_PATTERN = r'npwp[:\s-]*(\d{15,16})'
-    EMPLOYEE_ID_PATTERN = r'\b(EMP|KARY|NIP)([-\s]?)(\d{4,6})\b'
+    # NPWP pattern supports formats: 123456789012345 or 12.345.678.9-012.345
+    NPWP_PATTERN = r'npwp[:\s-]*(\d{2}[\.\s-]?\d{3}[\.\s-]?\d{3}[\.\s-]?\d{1}[\.\s-]?\d{3}[\.\s-]?\d{3}|\d{15,16})'
+    # Updated to support 4-10 digit employee IDs (e.g., EMP-1234, EMP20260109)
+    EMPLOYEE_ID_PATTERN = r'\b(EMP|KARY|NIP)([-\s]?)(\d{4,10})\b'
 
     # Masking patterns
     KTP_MASK_PATTERN = r'\b(\d{3})\d{10}(\d{3})\b'
-    NPWP_MASK_PATTERN = r'(npwp[:\s-]*)(\d{2})\d{11}(\d{2})'
-    EMPLOYEE_ID_MASK_PATTERN = r'\b(EMP|KARY|NIP)([-\s]?)(\d)\d{3}(\d)\b'
+    # Updated NPWP masking to handle both formats
+    NPWP_MASK_PATTERN = r'(npwp[:\s-]*)(\d{2})([\.\s-]?)\d{3}([\.\s-]?)\d{3}([\.\s-]?)\d{1}([\.\s-]?)\d{3}([\.\s-]?)(\d{3})'
+    # Updated masking pattern to support longer IDs
+    EMPLOYEE_ID_MASK_PATTERN = r'\b(EMP|KARY|NIP)([-\s]?)(\d{1,2})\d+(\d{1,2})\b'
 
     @classmethod
     def detect_ktp(cls, text: str) -> List[str]:
@@ -130,10 +134,10 @@ class SensitiveDataDetector:
         # Mask KTP (16 digits) - show first 3 and last 3
         text = re.sub(cls.KTP_MASK_PATTERN, r'\1***********\2', text)
 
-        # Mask NPWP - show first 2 and last 2
+        # Mask NPWP - show first 2 and last 3 digits
         text = re.sub(
             cls.NPWP_MASK_PATTERN,
-            r'\1\2***********\3',
+            r'\1\2\3***\6***\8',
             text,
             flags=re.IGNORECASE
         )
@@ -190,7 +194,8 @@ class SensitiveDataDetector:
             violation_types.append("Employee ID")
 
         return {
-            "has_sensitive_data": has_sensitive, "ktp_count": len(ktp_found),
+            "has_sensitive_data": has_sensitive,
+            "ktp_count": len(ktp_found),
             "npwp_count": len(npwp_found),
             "employee_id_count": len(employee_id_found),
             "violation_types": violation_types,

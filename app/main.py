@@ -540,7 +540,7 @@ async def root():
                 border-radius: 2rem;
                 padding: 3rem;
                 transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-                height: 450px;
+                min-height: 450px;
                 display: flex;
                 flex-direction: column;
             }
@@ -580,9 +580,9 @@ async def root():
             }
 
             .chart-card canvas {
-                max-height: 300px !important;
+                max-height: 240px !important;
                 width: 100% !important;
-                flex-shrink: 0;
+                height: auto !important;
             }
 
             .table-container {
@@ -1184,10 +1184,10 @@ async def root():
                             Attack Types
                         </h3>
                     </div>
-                    <div style="flex: 1; position: relative; max-height: 300px;">
+                    <div style="flex: 0 0 auto; position: relative; max-height: 240px; margin-bottom: 1.5rem;">
                         <canvas id="typeChart"></canvas>
                     </div>
-                    <div id="type-legend" style="margin-top: 1.5rem;"></div>
+                    <div id="type-legend" style="flex: 1 1 auto; overflow-y: auto; max-height: 200px;"></div>
                 </div>
             </div>
 
@@ -1445,7 +1445,19 @@ async def root():
 
                 const labels = data.map(d => d.type);
                 const counts = data.map(d => d.count);
-                const colors = ['#6b7280', '#9ca3af', '#4b5563', '#71717a', '#d1d5db'];
+                // Updated color palette to support more violation types
+                const colorMap = {
+                    'KTP': '#60a5fa',
+                    'NPWP': '#10b981',
+                    'Employee ID': '#f59e0b',
+                    'Credit Card': '#ef4444',
+                    'Passport': '#8b5cf6',
+                    'Phone Number': '#ec4899',
+                    'Email Address': '#06b6d4',
+                    'Sensitive Data': '#f97316',
+                    'Other': '#71717a'
+                };
+                const colors = labels.map(label => colorMap[label] || '#6b7280');
 
                 typeChart = new Chart(ctx, {
                     type: 'doughnut',
@@ -1463,18 +1475,10 @@ async def root():
                     options: {
                         responsive: true,
                         maintainAspectRatio: true,
-                        aspectRatio: 1.2,
+                        aspectRatio: 1.5,
                         plugins: {
                             legend: {
-                                display: true,
-                                position: 'bottom',
-                                labels: {
-                                    color: '#71717a',
-                                    padding: 20,
-                                    font: { size: 13, weight: '600' },
-                                    usePointStyle: true,
-                                    pointStyle: 'circle'
-                                }
+                                display: false  // Disabled built-in legend, using custom legend below
                             },
                             tooltip: {
                                 backgroundColor: 'rgba(0, 0, 0, 0.9)',
@@ -1489,14 +1493,14 @@ async def root():
                     }
                 });
 
-                // Create legend
+                // Create legend with improved alignment and wrapping
                 const legendHtml = data.map((d, i) => `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                        <span style="display: flex; align-items: center; gap: 0.75rem; color: #a1a1aa; font-weight: 600;">
-                            <span style="width: 16px; height: 16px; background: ${colors[i]}; border-radius: 50%; box-shadow: 0 0 20px ${colors[i]}80;"></span>
-                            ${d.type}
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem 0; border-bottom: 1px solid rgba(255,255,255,0.05); gap: 1rem;">
+                        <span style="display: flex; align-items: center; gap: 0.75rem; color: #a1a1aa; font-weight: 600; flex: 1; min-width: 0;">
+                            <span style="width: 16px; height: 16px; background: ${colors[i]}; border-radius: 50%; box-shadow: 0 0 20px ${colors[i]}80; flex-shrink: 0;"></span>
+                            <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${d.type}</span>
                         </span>
-                        <strong style="color: #ffffff; font-size: 1.125rem;">${d.count}</strong>
+                        <strong style="color: #ffffff; font-size: 1.125rem; flex-shrink: 0;">${d.count}</strong>
                     </div>
                 `).join('');
                 document.getElementById('type-legend').innerHTML = legendHtml;
@@ -1514,19 +1518,35 @@ async def root():
                 }
 
                 const rows = incidents.map(inc => {
-                    // Detect attack type from incident title
-                    let attackType = 'Unknown';
+                    // Detect attack type from incident title (case-insensitive)
+                    let attackType = 'Other';
                     let attackColor = '#71717a';
+                    const title = inc.incident_title.toLowerCase();
 
-                    if (inc.incident_title.includes('KTP') || inc.incident_title.includes('NIK')) {
-                        attackType = 'KTP/NIK';
+                    if (title.includes('ktp') || title.includes('nik')) {
+                        attackType = 'KTP';
                         attackColor = '#60a5fa';
-                    } else if (inc.incident_title.includes('NPWP')) {
+                    } else if (title.includes('npwp')) {
                         attackType = 'NPWP';
                         attackColor = '#10b981';
-                    } else if (inc.incident_title.includes('Employee')) {
+                    } else if (title.includes('employee')) {
                         attackType = 'Employee ID';
                         attackColor = '#f59e0b';
+                    } else if (title.includes('credit card') || title.includes('card number')) {
+                        attackType = 'Credit Card';
+                        attackColor = '#ef4444';
+                    } else if (title.includes('passport') || title.includes('paspor')) {
+                        attackType = 'Passport';
+                        attackColor = '#8b5cf6';
+                    } else if (title.includes('phone') || title.includes('telepon')) {
+                        attackType = 'Phone Number';
+                        attackColor = '#ec4899';
+                    } else if (title.includes('email') || title.includes('e-mail')) {
+                        attackType = 'Email Address';
+                        attackColor = '#06b6d4';
+                    } else if (title.includes('sensitive data') || title.includes('confidential')) {
+                        attackType = 'Sensitive Data';
+                        attackColor = '#f97316';
                     }
 
                     return `
@@ -1693,15 +1713,50 @@ async def get_statistics(
         }
 
 @app.get("/api/violations/recent")
-async def get_recent_violations(limit: int = 20, db: Session = Depends(get_db)):
-    """Get recent violations for incidents table"""
+async def get_recent_violations(
+    limit: int = 20,
+    period: str = "all",
+    start_date: str = None,
+    end_date: str = None,
+    db: Session = Depends(get_db)
+):
+    """Get recent violations for incidents table with date filtering"""
     try:
         from database import Offense
+        from datetime import timedelta
 
-        violations = db.query(Offense)\
-            .order_by(Offense.timestamp.desc())\
-            .limit(limit)\
-            .all()
+        # Jakarta timezone and date filtering logic
+        jakarta_tz = timedelta(hours=7)
+        now = datetime.utcnow()
+        now_jakarta = now + jakarta_tz
+
+        # Calculate date range
+        if start_date and end_date:
+            filter_start = datetime.strptime(start_date, "%Y-%m-%d") - jakarta_tz
+            filter_end = datetime.strptime(end_date, "%Y-%m-%d") + timedelta(days=1) - jakarta_tz
+        elif period == "today":
+            today = now_jakarta.date()
+            filter_start = datetime.combine(today, datetime.min.time()) - jakarta_tz
+            filter_end = datetime.combine(today, datetime.max.time()) - jakarta_tz
+        elif period == "week":
+            filter_start = (now_jakarta - timedelta(days=7)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now - jakarta_tz
+        elif period == "month":
+            filter_start = (now_jakarta - timedelta(days=30)).replace(hour=0, minute=0, second=0) - jakarta_tz
+            filter_end = now - jakarta_tz
+        else:  # "all"
+            filter_start = None
+            filter_end = None
+
+        # Base query with optional date filter
+        query = db.query(Offense).order_by(Offense.timestamp.desc())
+        if filter_start and filter_end:
+            query = query.filter(
+                Offense.timestamp >= filter_start,
+                Offense.timestamp <= filter_end
+            )
+
+        violations = query.limit(limit).all()
 
         return [{
             "id": v.id,
@@ -1838,26 +1893,26 @@ async def get_violations_by_type(
             title = v.incident_title.lower()
 
             # Check for specific patterns and categorize
-            categorized = False
-
-            if 'ktp' in title or '16 digit' in title or 'national id' in title:
+            # Using if-elif-else to ensure each violation is counted only once
+            if 'ktp' in title or 'nik' in title or '16 digit' in title or 'national id' in title:
                 type_counts['KTP'] += 1
-                categorized = True
-            elif 'npwp' in title or 'tax id' in title:
+            elif 'npwp' in title or 'tax id' in title or 'tax number' in title:
                 type_counts['NPWP'] += 1
-                categorized = True
-            elif 'employee' in title or 'kary' in title or 'emp-' in title or 'nip' in title:
+            elif 'employee' in title or 'kary' in title or 'emp-' in title or 'nip' in title or 'employee id' in title:
                 type_counts['Employee ID'] += 1
-                categorized = True
-            elif 'credit card' in title or 'card number' in title:
+            elif 'credit card' in title or 'card number' in title or 'cc number' in title:
                 type_counts['Credit Card'] += 1
-                categorized = True
-            elif 'sensitive data' in title or 'confidential' in title or 'dlp policy' in title:
+            elif 'passport' in title or 'paspor' in title:
+                type_counts['Passport'] += 1
+            elif 'phone' in title or 'telepon' in title or 'mobile' in title:
+                type_counts['Phone Number'] += 1
+            elif 'email' in title or 'e-mail' in title:
+                type_counts['Email Address'] += 1
+            elif 'sensitive data' in title or 'confidential' in title or 'dlp policy' in title or 'classified' in title:
                 # Generic DLP policy violations - categorize as "Sensitive Data"
                 type_counts['Sensitive Data'] += 1
-                categorized = True
-
-            if not categorized:
+            else:
+                # Any other type that doesn't match above patterns
                 type_counts['Other'] += 1
 
         return [{"type": k, "count": v} for k, v in type_counts.most_common()]

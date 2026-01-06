@@ -56,7 +56,9 @@ dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+nul
 TEST_FILES/test-critical-risk.txt
 TEST_FILES/test-low-risk-employee-data.docx
 TEST_FILES/test-low-risk-v2.txt
 TEST_FILES/test-medium-risk.txt
+TEST_FILES/
