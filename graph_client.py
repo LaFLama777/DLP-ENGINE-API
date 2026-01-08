@@ -169,7 +169,7 @@ async def perform_hard_block(user_upn: str) -> bool:
     try:
         # Step 1: Revoke sign-in sessions
         logger.info(f"[HARD BLOCK] Revoking sign-in sessions for: {user_upn}")
-        await client.users.by_user_id(user_upn).revoke_sign_in_sessions().post()
+        await client.users.by_user_id(user_upn).revoke_sign_in_sessions.post()
         logger.info(f"[OK] Sign-in sessions revoked for: {user_upn}")
 
         # Step 2: Disable the account

@@ -26,7 +26,6 @@ class RiskLevel(str, Enum):
     LOW = "Low"
     MEDIUM = "Medium"
     HIGH = "High"
-    CRITICAL = "Critical"
 
 
 class RemediationAction(str, Enum):

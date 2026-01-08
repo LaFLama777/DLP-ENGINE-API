@@ -164,7 +164,11 @@ class GraphEmailNotificationService:
 
         # ⚠️ CRITICAL: ALWAYS MASK ALL SENSITIVE DATA BEFORE PROCESSING
         # This prevents the notification emails from triggering DLP policies
+
+        # Generate specific detected items summary BEFORE full masking
+        detected_items_summary = None
         if blocked_content_summary:
+            detected_items_summary = SensitiveDataDetector.get_detected_items_summary(str(blocked_content_summary))
             blocked_content_summary = SensitiveDataDetector.mask_sensitive_data(str(blocked_content_summary))
 
         if incident_title:
@@ -183,7 +187,7 @@ class GraphEmailNotificationService:
         # Determine severity - 3-TIER SYSTEM
         is_low = violation_count == 1
         is_medium = violation_count == 2
-        is_critical = violation_count >= 3
+        is_high = violation_count >= 3
 
         # DLP-safe subject line (no emojis, clear categorization for exception rules)
         # Different subject for each risk level
@@ -191,8 +195,8 @@ class GraphEmailNotificationService:
             subject = "[EDUCATION] Security Training - DLP Policy Awareness"
         elif is_medium:
             subject = f"[WARNING] Email Blocked - DLP Policy Violation #{violation_count}"
-        else:  # is_critical
-            subject = f"[CRITICAL] Account Locked - DLP Policy Violation #{violation_count}"
+        else:  # is_high
+            subject = f"[HIGH RISK] Account Locked - DLP Policy Violation #{violation_count}"
         
         # Build violation tags HTML
         violation_tags_html = ""
@@ -222,9 +226,9 @@ class GraphEmailNotificationService:
                     overflow: hidden;
                 }}
                 .header {{
-                    background-color: {'#dc3545' if is_critical else ('#ffc107' if is_medium else '#10b981')};
-                    background: {'linear-gradient(135deg, #dc3545 0%, #bd2130 100%)' if is_critical else ('linear-gradient(135deg, #ffc107 0%, #e0a800 100%)' if is_medium else 'linear-gradient(135deg, #10b981 0%, #059669 100%)')};
-                    color: {'white' if (is_critical or is_low) else '#212529'};
+                    background-color: {'#dc3545' if is_high else ('#ffc107' if is_medium else '#10b981')};
+                    background: {'linear-gradient(135deg, #dc3545 0%, #bd2130 100%)' if is_high else ('linear-gradient(135deg, #ffc107 0%, #e0a800 100%)' if is_medium else 'linear-gradient(135deg, #10b981 0%, #059669 100%)')};
+                    color: {'white' if (is_high or is_low) else '#212529'};
                     padding: 30px;
                     text-align: center;
                 }}
@@ -242,14 +246,14 @@ class GraphEmailNotificationService:
                     padding: 35px;
                 }}
                 .alert-box {{
-                    background: {'#fff5f5' if is_critical else ('#fff3cd' if is_medium else '#d1f4e0')};
-                    border-left: 4px solid {'#dc3545' if is_critical else ('#ffc107' if is_medium else '#10b981')};
+                    background: {'#fff5f5' if is_high else ('#fff3cd' if is_medium else '#d1f4e0')};
+                    border-left: 4px solid {'#dc3545' if is_high else ('#ffc107' if is_medium else '#10b981')};
                     padding: 18px;
                     margin: 25px 0;
                     border-radius: 4px;
                 }}
                 .alert-box strong {{
-                    color: {'#721c24' if is_critical else ('#856404' if is_medium else '#065f46')};
+                    color: {'#721c24' if is_high else ('#856404' if is_medium else '#065f46')};
                     font-size: 15px;
                 }}
                 .info-box {{
@@ -289,8 +293,8 @@ class GraphEmailNotificationService:
                 }}
                 .warning-badge {{
                     display: inline-block;
-                    background: {'#dc3545' if is_critical else ('#ffc107' if is_medium else '#10b981')};
-                    color: {'white' if (is_critical or is_low) else '#212529'};
+                    background: {'#dc3545' if is_high else ('#ffc107' if is_medium else '#10b981')};
+                    color: {'white' if (is_high or is_low) else '#212529'};
                     padding: 8px 16px;
                     border-radius: 20px;
                     font-size: 13px;
@@ -380,7 +384,7 @@ class GraphEmailNotificationService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>{'CRITICAL ALERT' if is_critical else ('Email Blocked' if is_medium else 'Security Training Notice')}</h1>
+                    <h1>{'HIGH RISK ALERT' if is_high else ('Email Blocked' if is_medium else 'Security Training Notice')}</h1>
                     <p>Data Loss Prevention System</p>
                 </div>
 
@@ -388,10 +392,10 @@ class GraphEmailNotificationService:
                     <p style="font-size: 16px; color: #212529;">Dear User,</p>
 
                     <div class="alert-box">
-                        <strong>{'WARNING: YOUR ACCOUNT HAS BEEN LOCKED' if is_critical else ('WARNING: Your email/document was blocked by our security system' if is_medium else 'EDUCATION: Your email/document contains sensitive information')}</strong>
+                        <strong>{'WARNING: YOUR ACCOUNT HAS BEEN LOCKED' if is_high else ('WARNING: Your email/document was blocked by our security system' if is_medium else 'EDUCATION: Your email/document contains sensitive information')}</strong>
                     </div>
 
-                    <p>{'Your account has been locked because you have reached the maximum violation limit (3 violations). All sign-in sessions have been revoked to protect company data.' if is_critical else ('Your recent email or document was blocked because it contains <strong>sensitive information</strong> that violates company security policies.' if is_medium else 'We detected that your recent email or document contains <strong>sensitive information</strong>. This message is for <strong>educational purposes</strong> to help you understand our data security policies.')}</p>
+                    <p>{'Your account has been locked because you have reached the maximum violation limit (3 violations). All sign-in sessions have been revoked to protect company data.' if is_high else ('Your recent email or document was blocked because it contains <strong>sensitive information</strong> that violates company security policies.' if is_medium else 'We detected that your recent email or document contains <strong>sensitive information</strong>. This message is for <strong>educational purposes</strong> to help you understand our data security policies.')}</p>
                     
                     <div class="info-box">
                         <div class="info-item">
@@ -404,7 +408,7 @@ class GraphEmailNotificationService:
                         </div>
                         <div class="info-item">
                             <div class="info-label">Violation Count:</div>
-                            <div class="info-value"><strong style="font-size: 18px; color: {'#dc3545' if is_critical else ('#ffc107' if is_medium else '#10b981')};">{violation_count}</strong> / 3 violations</div>
+                            <div class="info-value"><strong style="font-size: 18px; color: {'#dc3545' if is_high else ('#ffc107' if is_medium else '#10b981')};">{violation_count}</strong> / 3 violations</div>
                         </div>
                         {f'<div class="info-item"><div class="info-label">File Name:</div><div class="info-value">{file_name}</div></div>' if file_name else ''}
                         {f'<div class="info-item"><div class="info-label">Incident:</div><div class="info-value">{incident_title}</div></div>' if incident_title else ''}
@@ -413,7 +417,19 @@ class GraphEmailNotificationService:
                             <div class="info-value">{datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")} UTC</div>
                         </div>
                     </div>
-                    
+
+                    {f'''
+                    <div style="background: #fff3e0; border: 2px solid #ff9800; border-radius: 8px; padding: 20px; margin: 25px 0;">
+                        <h3 style="color: #e65100; margin: 0 0 15px 0; font-size: 16px;">Specific Data Detected</h3>
+                        <p style="margin: 0; color: #bf360c; font-family: 'Courier New', monospace; font-size: 15px; font-weight: 600;">
+                            {detected_items_summary}
+                        </p>
+                        <p style="margin: 15px 0 0 0; font-size: 12px; color: #e65100;">
+                            <strong>Note:</strong> The above data has been masked for your privacy. Your original email/document contained the actual full values of these sensitive items.
+                        </p>
+                    </div>
+                    ''' if detected_items_summary else ''}
+
                     {f'''
                     <h3 style="color: #495057; margin-top: 30px;">Detected Content (Redacted for Security):</h3>
                     <div class="redacted-box">
@@ -439,16 +455,16 @@ class GraphEmailNotificationService:
                         <p style="margin-top: 15px;"><strong>Why this matters:</strong> These data types are protected by Indonesian regulations (UU ITE, GDPR compliance) and company security policies. Unauthorized sharing can lead to identity theft, fraud, or regulatory penalties.</p>
                     </div>
                     
-                    {'<div class="critical-warning"><h3>ACCOUNT LOCKED - IMMEDIATE ACTION REQUIRED</h3><p>You have reached the maximum violation limit (3 violations).</p><p>Your account sign-in has been revoked to protect company data.</p><p style="margin-top: 15px; font-size: 14px;">To regain access, you must:</p><ul style="text-align: left; display: inline-block; margin: 10px auto;"><li>Contact IT Security immediately</li><li>Complete mandatory security training</li><li>Review and acknowledge security policies</li></ul><p style="margin-top: 15px;"><strong>Contact:</strong> <a href="mailto:' + (self.admin_email or 'security@company.com') + '" style="color: #dc3545;">' + (self.admin_email or 'security@company.com') + '</a></p></div>' if is_critical else ''}
+                    {'<div class="critical-warning"><h3>ACCOUNT LOCKED - IMMEDIATE ACTION REQUIRED</h3><p>You have reached the maximum violation limit (3 violations).</p><p>Your account sign-in has been revoked to protect company data.</p><p style="margin-top: 15px; font-size: 14px;">To regain access, you must:</p><ul style="text-align: left; display: inline-block; margin: 10px auto;"><li>Contact IT Security immediately</li><li>Complete mandatory security training</li><li>Review and acknowledge security policies</li></ul><p style="margin-top: 15px;"><strong>Contact:</strong> <a href="mailto:' + (self.admin_email or 'security@company.com') + '" style="color: #dc3545;">' + (self.admin_email or 'security@company.com') + '</a></p></div>' if is_high else ''}
 
                     {f'<div class="alert-box"><strong>WARNING:</strong> You have <strong>{violation_count} out of 3</strong> violations. One more violation will result in automatic account suspension and mandatory security training.</div>' if is_medium else ''}
 
                     {'<div style="background: #d1f4e0; border-left: 4px solid #10b981; padding: 20px; margin: 25px 0; border-radius: 4px;"><p style="margin: 0; color: #065f46;"><strong>Good News:</strong> This is your first violation, so <strong>no action has been taken against your account</strong>. We are providing this education to help you understand our data security policies and prevent future violations.</p><p style="margin: 10px 0 0 0; color: #065f46;">Think of this as a <strong>friendly reminder</strong> to be more careful when handling sensitive information.</p></div>' if is_low else ''}
                     
                     <div class="steps-list">
-                        <h3 style="color: #004085; margin-top: 0;">{'Immediate Actions Required:' if is_critical else ('Required Actions:' if is_medium else 'What You Should Know:')}</h3>
+                        <h3 style="color: #004085; margin-top: 0;">{'Immediate Actions Required:' if is_high else ('Required Actions:' if is_medium else 'What You Should Know:')}</h3>
                         <ol>
-                            {('<li><strong>Contact IT Security immediately:</strong> <a href="mailto:' + (self.admin_email or 'security@company.com') + '">' + (self.admin_email or 'security@company.com') + '</a> to unlock your account</li><li><strong>Complete mandatory security training</strong> before your account can be restored</li><li><strong>Review security policies</strong> and acknowledge understanding</li>') if is_critical else ('<li><strong>Review your content:</strong> Remove all sensitive information (KTP, NPWP, Employee IDs) before sending</li><li><strong>Use approved channels:</strong> For sharing sensitive data, use secure company portals or encrypted file sharing systems</li><li><strong>Verify recipient:</strong> Ensure the recipient is authorized to receive confidential information</li><li><strong>Apply data masking:</strong> When sharing examples, mask sensitive digits (e.g., 321***********456)</li><li><strong>Be more careful:</strong> One more violation will result in automatic account suspension</li><li><strong>Need help?</strong> Contact IT Security: <a href="mailto:' + (self.admin_email or 'security@company.com') + '">' + (self.admin_email or 'security@company.com') + '</a></li>' if is_medium else '<li><strong>Understand what data is sensitive:</strong> KTP, NPWP, Employee IDs, and other protected information should not be shared via regular email</li><li><strong>Use secure channels:</strong> For legitimate business needs, use encrypted file sharing or company-approved platforms</li><li><strong>Double-check before sending:</strong> Always review your attachments and email content before sending</li><li><strong>Learn more:</strong> Read our data security policies and best practices guides</li><li><strong>Questions?</strong> Contact IT Security: <a href="mailto:' + (self.admin_email or 'security@company.com') + '">' + (self.admin_email or 'security@company.com') + '</a></li>')}
+                            {('<li><strong>Contact IT Security immediately:</strong> <a href="mailto:' + (self.admin_email or 'security@company.com') + '">' + (self.admin_email or 'security@company.com') + '</a> to unlock your account</li><li><strong>Complete mandatory security training</strong> before your account can be restored</li><li><strong>Review security policies</strong> and acknowledge understanding</li>') if is_high else ('<li><strong>Review your content:</strong> Remove all sensitive information (KTP, NPWP, Employee IDs) before sending</li><li><strong>Use approved channels:</strong> For sharing sensitive data, use secure company portals or encrypted file sharing systems</li><li><strong>Verify recipient:</strong> Ensure the recipient is authorized to receive confidential information</li><li><strong>Apply data masking:</strong> When sharing examples, mask sensitive digits (e.g., 321***********456)</li><li><strong>Be more careful:</strong> One more violation will result in automatic account suspension</li><li><strong>Need help?</strong> Contact IT Security: <a href="mailto:' + (self.admin_email or 'security@company.com') + '">' + (self.admin_email or 'security@company.com') + '</a></li>' if is_medium else '<li><strong>Understand what data is sensitive:</strong> KTP, NPWP, Employee IDs, and other protected information should not be shared via regular email</li><li><strong>Use secure channels:</strong> For legitimate business needs, use encrypted file sharing or company-approved platforms</li><li><strong>Double-check before sending:</strong> Always review your attachments and email content before sending</li><li><strong>Learn more:</strong> Read our data security policies and best practices guides</li><li><strong>Questions?</strong> Contact IT Security: <a href="mailto:' + (self.admin_email or 'security@company.com') + '">' + (self.admin_email or 'security@company.com') + '</a></li>')}
                         </ol>
                     </div>
                     
@@ -776,9 +792,9 @@ class GraphEmailNotificationService:
             logger.error("Email credentials not configured")
             return False
 
-        is_critical = violation_count >= 3
+        is_high = violation_count >= 3
         # DLP-safe subject line (no emojis, clear categorization)
-        subject = f"[{'CRITICAL' if is_critical else 'ALERT'}] High-Risk Activity: {user}"
+        subject = f"[{'HIGH RISK' if is_high else 'ALERT'}] High-Risk Activity: {user}"
         
         violation_types_str = ", ".join(violation_types) if violation_types else "Unknown"
         
@@ -803,9 +819,9 @@ class GraphEmailNotificationService:
                     overflow: hidden;
                 }}
                 .header {{
-                    background-color: {'#dc3545' if is_critical else '#ffc107'};
-                    background: {'linear-gradient(135deg, #dc3545 0%, #c82333 100%)' if is_critical else 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)'};
-                    color: {'white' if is_critical else '#212529'};
+                    background-color: {'#dc3545' if is_high else '#ffc107'};
+                    background: {'linear-gradient(135deg, #dc3545 0%, #c82333 100%)' if is_high else 'linear-gradient(135deg, #ffc107 0%, #e0a800 100%)'};
+                    color: {'white' if is_high else '#212529'};
                     padding: 30px;
                     text-align: center;
                 }}
@@ -818,8 +834,8 @@ class GraphEmailNotificationService:
                     padding: 35px;
                 }}
                 .alert-section {{
-                    background: {'#fff5f5' if is_critical else '#fff9e6'};
-                    border-left: 4px solid {'#dc3545' if is_critical else '#ffc107'};
+                    background: {'#fff5f5' if is_high else '#fff9e6'};
+                    border-left: 4px solid {'#dc3545' if is_high else '#ffc107'};
                     padding: 20px;
                     margin: 25px 0;
                     border-radius: 4px;
@@ -871,7 +887,7 @@ class GraphEmailNotificationService:
                     border-radius: 15px;
                     font-size: 12px;
                     font-weight: 600;
-                    background: {'#dc3545' if is_critical else '#28a745'};
+                    background: {'#dc3545' if is_high else '#28a745'};
                     color: white;
                 }}
                 .btn {{
@@ -897,7 +913,7 @@ class GraphEmailNotificationService:
         <body>
             <div class="container">
                 <div class="header">
-                    <h1>{'CRITICAL SECURITY ALERT' if is_critical else 'DLP Security Alert'}</h1>
+                    <h1>{'HIGH RISK SECURITY ALERT' if is_high else 'DLP Security Alert'}</h1>
                     <p>Immediate Administrative Action Required</p>
                 </div>
                 
@@ -905,19 +921,19 @@ class GraphEmailNotificationService:
                     <p style="font-size: 16px; font-weight: 600;">Security Team,</p>
                     
                     <div class="alert-section">
-                        <p style="margin: 0; font-size: 15px; {'color: #721c24;' if is_critical else 'color: #856404;'}">
-                            <strong>{'CRITICAL: User account has been automatically locked due to repeated policy violations' if is_critical else 'WARNING: High-risk DLP activity detected requiring review'}</strong>
+                        <p style="margin: 0; font-size: 15px; {'color: #721c24;' if is_high else 'color: #856404;'}">
+                            <strong>{'HIGH RISK: User account has been automatically locked due to repeated policy violations' if is_high else 'WARNING: High-risk DLP activity detected requiring review'}</strong>
                         </p>
                     </div>
                     
                     <div class="info-grid">
                         <div class="info-card">
                             <div class="info-card-label">Violation Count</div>
-                            <div class="info-card-value" style="color: {'#dc3545' if is_critical else '#ffc107'};">{violation_count}</div>
+                            <div class="info-card-value" style="color: {'#dc3545' if is_high else '#ffc107'};">{violation_count}</div>
                         </div>
                         <div class="info-card">
                             <div class="info-card-label">Risk Level</div>
-                            <div class="info-card-value" style="color: {'#dc3545' if is_critical else '#ffc107'};">{'CRITICAL' if is_critical else 'HIGH'}</div>
+                            <div class="info-card-value" style="color: {'#dc3545' if is_high else '#ffc107'};">{'HIGH' if is_high else 'MEDIUM'}</div>
                         </div>
                     </div>
                     
@@ -933,7 +949,7 @@ class GraphEmailNotificationService:
                         </tr>
                         <tr>
                             <td><strong>Total Violations</strong></td>
-                            <td><span style="font-size: 18px; font-weight: 700; color: {'#dc3545' if is_critical else '#ffc107'};">{violation_count}</span></td>
+                            <td><span style="font-size: 18px; font-weight: 700; color: {'#dc3545' if is_high else '#ffc107'};">{violation_count}</span></td>
                         </tr>
                         <tr>
                             <td><strong>Violation Types</strong></td>
@@ -956,7 +972,7 @@ class GraphEmailNotificationService:
                     
                     {'''
                     <div style="background: #f8d7da; border: 2px solid #dc3545; border-radius: 8px; padding: 20px; margin: 25px 0;">
-                        <h3 style="color: #721c24; margin-top: 0;">Critical Actions Performed</h3>
+                        <h3 style="color: #721c24; margin-top: 0;">High Risk Actions Performed</h3>
                         <ul style="color: #721c24; margin: 10px 0;">
                             <li><strong>Account sign-in revoked</strong> - User cannot access company resources</li>
                             <li><strong>Active sessions terminated</strong> - All current sessions have been logged out</li>
@@ -964,7 +980,7 @@ class GraphEmailNotificationService:
                             <li><strong>Security training assigned</strong> - Mandatory training required for account restoration</li>
                         </ul>
                     </div>
-                    
+
                     <h3 style="color: #495057;">Required Administrative Actions</h3>
                     <ol style="line-height: 1.8;">
                         <li><strong>Review incident details</strong> in the DLP dashboard</li>
@@ -974,7 +990,7 @@ class GraphEmailNotificationService:
                         <li><strong>Document incident</strong> in user's security record</li>
                         <li><strong>Consider additional measures</strong> based on violation severity and user history</li>
                     </ol>
-                    ''' if is_critical else '''
+                    ''' if is_high else '''
                     <div style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 8px; padding: 20px; margin: 25px 0;">
                         <h3 style="color: #856404; margin-top: 0;">Recommended Actions</h3>
                         <ul style="color: #856404; margin: 10px 0;">

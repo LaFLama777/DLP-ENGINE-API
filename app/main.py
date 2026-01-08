@@ -2209,28 +2209,28 @@ async def incidents_overview(
 
         # Severity filter
         if severity:
-            if severity == "CRITICAL":
+            if severity == "HIGH":
                 # Get users with 3+ violations
                 user_counts = db.query(
                     Offense.user_principal_name,
                     func.count(Offense.id).label('count')
                 ).group_by(Offense.user_principal_name).having(func.count(Offense.id) >= 3).all()
-                critical_users = [u[0] for u in user_counts]
-                query = query.filter(Offense.user_principal_name.in_(critical_users))
-            elif severity == "HIGH":
-                user_counts = db.query(
-                    Offense.user_principal_name,
-                    func.count(Offense.id).label('count')
-                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) == 2).all()
-                high_users = [u[0] for u in user_counts]
-                query = query.filter(Offense.user_principal_name.in_(high_users))
+                high_risk_users = [u[0] for u in user_counts]
+                query = query.filter(Offense.user_principal_name.in_(high_risk_users))
             elif severity == "MEDIUM":
                 user_counts = db.query(
                     Offense.user_principal_name,
                     func.count(Offense.id).label('count')
-                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) == 1).all()
+                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) == 2).all()
                 medium_users = [u[0] for u in user_counts]
                 query = query.filter(Offense.user_principal_name.in_(medium_users))
+            elif severity == "LOW":
+                user_counts = db.query(
+                    Offense.user_principal_name,
+                    func.count(Offense.id).label('count')
+                ).group_by(Offense.user_principal_name).having(func.count(Offense.id) == 1).all()
+                low_users = [u[0] for u in user_counts]
+                query = query.filter(Offense.user_principal_name.in_(low_users))
 
         # Get total count before pagination
         total_incidents = query.count()
@@ -2256,7 +2256,7 @@ async def incidents_overview(
         # Format incidents for display
         def get_risk_level(count):
             if count >= 3:
-                return {"level": "CRITICAL", "color": "#ef4444", "icon": "🔴"}
+                return {"level": "HIGH", "color": "#ef4444", "icon": "🔴"}
             elif count == 2:
                 return {"level": "MEDIUM", "color": "#f59e0b", "icon": "🟠"}
             else:
@@ -2763,9 +2763,9 @@ async def incidents_overview(
                                 <label for="severity">Risk Level</label>
                                 <select id="severity" name="severity">
                                     <option value="" {'selected' if not severity else ''}>All Levels</option>
-                                    <option value="CRITICAL" {'selected' if severity == 'CRITICAL' else ''}>● Critical (3+)</option>
-                                    <option value="HIGH" {'selected' if severity == 'HIGH' else ''}>● High (2)</option>
-                                    <option value="MEDIUM" {'selected' if severity == 'MEDIUM' else ''}>● Medium (1)</option>
+                                    <option value="HIGH" {'selected' if severity == 'HIGH' else ''}>● High (3+)</option>
+                                    <option value="MEDIUM" {'selected' if severity == 'MEDIUM' else ''}>● Medium (2)</option>
+                                    <option value="LOW" {'selected' if severity == 'LOW' else ''}>● Low (1)</option>
                                 </select>
                             </div>
 
@@ -2837,7 +2837,7 @@ async def incident_detail(incident_id: int, db: Session = Depends(get_db)):
 
         # Determine risk level
         if violation_count >= 3:
-            risk_level = "CRITICAL"
+            risk_level = "HIGH"
             risk_color = "#ef4444"
             risk_icon = "🔴"
         elif violation_count >= 2:
@@ -3460,7 +3460,7 @@ async def handle_incident_action(incident_id: int, request: dict, db: Session = 
 
                         # Wait 3 seconds to ensure email delivery before revoking
                         import asyncio
-                        logger.info(f"⏳ Waiting 3 seconds to ensure email delivery...")
+                        logger.info(f"Waiting 3 seconds to ensure email delivery...")
                         await asyncio.sleep(3)
                         logger.info(f"[OK] Email delivery window completed, proceeding with revocation...")
                     else:
@@ -3525,7 +3525,7 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
     Accepts remediation requests from Microsoft Sentinel/Logic Apps with 3-tier risk escalation:
     - LOW (count=1): Education email only, NO blocking
     - MEDIUM (count=2): Warning email + session revoke (soft block)
-    - CRITICAL (count=3+): Email FIRST -> 3s delay -> account disabled
+    - HIGH (count=3+): Email FIRST -> 3s delay -> account disabled
     """
     try:
         user_email = request.get("userPrincipalName")
@@ -3572,14 +3572,14 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
         # SCENARIO 1: LOW RISK (count=1) - Education email only
         if violation_count == 1:
-            logger.info(f"🟢 LOW RISK - Violation #{violation_count} for {user_email}")
+            logger.info(f"[LOW RISK] Violation #{violation_count} for {user_email}")
             logger.info(f"   Action: Education email only, NO blocking")
             results["risk_level"] = "LOW"
 
             # Send education email
             if EMAIL_ENABLED and email_service:
                 try:
-                    logger.info(f"   📧 Sending education email...")
+                    logger.info(f"   Sending education email...")
                     result = await email_service.send_violation_notification(
                         recipient=user_email,
                         violation_types=["Sensitive Data Detection"],
@@ -3594,9 +3594,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                         "status": result,
                         "message": "Education email sent successfully" if result else "Email send failed"
                     })
-                    logger.info(f"   ✅ Education email sent to {user_email}")
+                    logger.info(f"   [OK] Education email sent to {user_email}")
                 except Exception as e:
-                    logger.error(f"   ❌ Email failed: {e}")
+                    logger.error(f"   [ERROR] Email failed: {e}")
                     results["details"].append({
                         "action": "educationEmail",
                         "status": False,
@@ -3607,14 +3607,14 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
         # SCENARIO 2: MEDIUM RISK (count=2) - Warning email + Session revoke
         elif violation_count == 2:
-            logger.info(f"🟠 MEDIUM RISK - Violation #{violation_count} for {user_email}")
+            logger.info(f"[MEDIUM RISK] Violation #{violation_count} for {user_email}")
             logger.info(f"   Action: Warning email + session revoke (soft block)")
             results["risk_level"] = "MEDIUM"
 
             # Send warning email
             if EMAIL_ENABLED and email_service:
                 try:
-                    logger.info(f"   📧 Sending warning email...")
+                    logger.info(f"   Sending warning email...")
                     result = await email_service.send_violation_notification(
                         recipient=user_email,
                         violation_types=["Sensitive Data Detection"],
@@ -3629,9 +3629,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                         "status": result,
                         "message": "Warning email sent successfully" if result else "Email send failed"
                     })
-                    logger.info(f"   ✅ Warning email sent to {user_email}")
+                    logger.info(f"   [OK] Warning email sent to {user_email}")
                 except Exception as e:
-                    logger.error(f"   ❌ Email failed: {e}")
+                    logger.error(f"   [ERROR] Email failed: {e}")
                     results["details"].append({
                         "action": "warningEmail",
                         "status": False,
@@ -3649,9 +3649,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                         "status": revoke_result,
                         "message": "Sessions revoked (account still active)" if revoke_result else "Session revoke failed"
                     })
-                    logger.info(f"   ✅ Sessions revoked for {user_email} (account still active, can re-login)")
+                    logger.info(f"   [OK] Sessions revoked for {user_email} (account still active, can re-login)")
                 except Exception as e:
-                    logger.error(f"   ❌ Session revocation failed: {e}")
+                    logger.error(f"   [ERROR] Session revocation failed: {e}")
                     results["ok"] = False
                     results["details"].append({
                         "action": "softBlock",
@@ -3661,16 +3661,16 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
 
             results["message"] = f"MEDIUM risk - Warning sent + sessions revoked for {user_email}"
 
-        # SCENARIO 3: CRITICAL RISK (count>=3) - Email FIRST -> 3s delay -> Account disabled
+        # SCENARIO 3: HIGH RISK (count>=3) - Email FIRST -> 3s delay -> Account disabled
         else:  # violation_count >= 3
-            logger.info(f"🔴 CRITICAL RISK - Violation #{violation_count} for {user_email}")
+            logger.info(f"[HIGH RISK] Violation #{violation_count} for {user_email}")
             logger.info(f"   Action: Email FIRST → 3s delay → Account disabled")
-            results["risk_level"] = "CRITICAL"
+            results["risk_level"] = "HIGH"
 
             # Step 1: Send email FIRST (user gets notified before being blocked)
             if EMAIL_ENABLED and email_service:
                 try:
-                    logger.info(f"   📧 Sending critical alert email FIRST (before blocking)...")
+                    logger.info(f"   Sending high risk alert email FIRST (before blocking)...")
                     result = await email_service.send_violation_notification(
                         recipient=user_email,
                         violation_types=["Sensitive Data Detection"],
@@ -3681,28 +3681,28 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                     )
                     results["email_sent"] = result
                     results["details"].append({
-                        "action": "criticalEmail",
+                        "action": "highRiskEmail",
                         "status": result,
-                        "message": "Critical alert email sent" if result else "Email send failed"
+                        "message": "High risk alert email sent" if result else "Email send failed"
                     })
-                    logger.info(f"   ✅ Critical alert email sent to {user_email}")
+                    logger.info(f"   [OK] High risk alert email sent to {user_email}")
                 except Exception as e:
-                    logger.error(f"   ❌ Email failed: {e}")
+                    logger.error(f"   [ERROR] Email failed: {e}")
                     results["details"].append({
-                        "action": "criticalEmail",
+                        "action": "highRiskEmail",
                         "status": False,
                         "message": f"Email error: {str(e)}"
                     })
 
             # Step 2: Wait 3 seconds (email-first mechanism for better UX)
-            logger.info(f"   ⏳ Waiting 3 seconds to ensure email delivery...")
+            logger.info(f"   Waiting 3 seconds to ensure email delivery...")
             await asyncio.sleep(3)
-            logger.info(f"   ✅ 3 second delay completed")
+            logger.info(f"   [OK] 3 second delay completed")
 
             # Step 3: Disable account (hard block)
             if settings.FEATURE_ACCOUNT_REVOCATION:
                 try:
-                    logger.info(f"   🔒 Disabling account for {user_email}...")
+                    logger.info(f"   Disabling account for {user_email}...")
                     block_result = await perform_hard_block(user_email)
                     results["blocked"] = block_result
                     results["details"].append({
@@ -3710,9 +3710,9 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                         "status": block_result,
                         "message": "Account DISABLED" if block_result else "Account disable failed"
                     })
-                    logger.info(f"   ✅ Account DISABLED for {user_email}")
+                    logger.info(f"   [OK] Account DISABLED for {user_email}")
                 except Exception as e:
-                    logger.error(f"   ❌ Account revocation failed: {e}")
+                    logger.error(f"   [ERROR] Account revocation failed: {e}")
                     results["ok"] = False
                     results["details"].append({
                         "action": "hardBlock",
@@ -3720,10 +3720,10 @@ async def sentinel_remediate(request: dict, db: Session = Depends(get_db)):
                         "message": f"Account disable error: {str(e)}"
                     })
 
-            results["message"] = f"CRITICAL risk - Email sent + account disabled for {user_email}"
+            results["message"] = f"HIGH risk - Email sent + account disabled for {user_email}"
 
         # Log final summary
-        logger.info(f"✅ Remediation summary: {results['message']}")
+        logger.info(f"[OK] Remediation summary: {results['message']}")
         return JSONResponse(results)
 
     except Exception as e:
@@ -3803,7 +3803,7 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
         # SCENARIO 1: LOW RISK (count=1) - Education email only
         # ============================================================================
         if offense_count == 1:
-            logger.info(f"🟢 LOW RISK - Violation #{offense_count} for {user_upn}")
+            logger.info(f"[LOW RISK] Violation #{offense_count} for {user_upn}")
             action_taken = "Education Email"
 
             # Send education email
@@ -3818,15 +3818,15 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
                         file_name=file_name
                     )
                     email_sent = result
-                    logger.info(f"✅ Education email sent to {user_upn}")
+                    logger.info(f"[OK] Education email sent to {user_upn}")
                 except Exception as e:
-                    logger.error(f"❌ Email failed: {e}")
+                    logger.error(f"[ERROR] Email failed: {e}")
 
         # ============================================================================
         # SCENARIO 2: MEDIUM RISK (count=2) - Warning email + Session revoke
         # ============================================================================
         elif offense_count == 2:
-            logger.info(f"🟠 MEDIUM RISK - Violation #{offense_count} for {user_upn}")
+            logger.info(f"[MEDIUM RISK] Violation #{offense_count} for {user_upn}")
             action_taken = "Warning Email + Session Revoke"
 
             # Send warning email
@@ -3841,30 +3841,30 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
                         file_name=file_name
                     )
                     email_sent = result
-                    logger.info(f"✅ Warning email sent to {user_upn}")
+                    logger.info(f"[OK] Warning email sent to {user_upn}")
                 except Exception as e:
-                    logger.error(f"❌ Email failed: {e}")
+                    logger.error(f"[ERROR] Email failed: {e}")
 
             # Revoke sessions (soft block - account still active)
             if settings.FEATURE_ACCOUNT_REVOCATION:
                 try:
                     revoke_result = await perform_soft_block(user_upn)
                     session_revoked = revoke_result
-                    logger.info(f"✅ Sessions revoked for {user_upn} (account still active)")
+                    logger.info(f"[OK] Sessions revoked for {user_upn} (account still active)")
                 except Exception as e:
-                    logger.error(f"❌ Session revocation failed: {e}")
+                    logger.error(f"[ERROR] Session revocation failed: {e}")
 
         # ============================================================================
-        # SCENARIO 3: CRITICAL RISK (count>=3) - Email FIRST → 3s delay → Account disabled
+        # SCENARIO 3: HIGH RISK (count>=3) - Email FIRST → 3s delay → Account disabled
         # ============================================================================
         else:  # offense_count >= 3
-            logger.info(f"🔴 CRITICAL RISK - Violation #{offense_count} for {user_upn}")
+            logger.info(f"[HIGH RISK] Violation #{offense_count} for {user_upn}")
             action_taken = "Email First → Account Disabled"
 
             # Step 1: Send email FIRST (user gets notified before being blocked)
             if EMAIL_ENABLED and email_service:
                 try:
-                    logger.info(f"📧 Sending critical alert email FIRST (before blocking)...")
+                    logger.info(f"Sending high risk alert email FIRST (before blocking)...")
                     result = await email_service.send_violation_notification(
                         recipient=user_upn,
                         violation_types=violation_types,
@@ -3874,26 +3874,26 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
                         file_name=file_name
                     )
                     email_sent = result
-                    logger.info(f"✅ Critical alert email sent to {user_upn}")
+                    logger.info(f"[OK] High risk alert email sent to {user_upn}")
                 except Exception as e:
-                    logger.error(f"❌ Email failed: {e}")
+                    logger.error(f"[ERROR] Email failed: {e}")
 
             # Step 2: Wait 3 seconds (email-first mechanism for better UX)
-            logger.info(f"⏳ Waiting 3 seconds to ensure email delivery...")
+            logger.info(f"Waiting 3 seconds to ensure email delivery...")
             await asyncio.sleep(3)
-            logger.info(f"✅ 3 second delay completed")
+            logger.info(f"[OK] 3 second delay completed")
 
             # Step 3: Disable account (hard block)
             if settings.FEATURE_ACCOUNT_REVOCATION:
                 try:
-                    logger.info(f"🔒 Disabling account for {user_upn}...")
+                    logger.info(f"Disabling account for {user_upn}...")
                     revoke_result = await perform_hard_block(user_upn)
                     account_disabled = revoke_result
-                    logger.info(f"✅ Account DISABLED for {user_upn}")
+                    logger.info(f"[OK] Account DISABLED for {user_upn}")
                 except Exception as e:
-                    logger.error(f"❌ Account revocation failed: {e}")
+                    logger.error(f"[ERROR] Account revocation failed: {e}")
 
-            # Send admin alert for critical violations
+            # Send admin alert for high risk violations
             if EMAIL_ENABLED and email_service:
                 try:
                     await email_service.send_admin_alert(
@@ -3905,9 +3905,9 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
                         file_name=file_name
                     )
                     admin_notified = True
-                    logger.info(f"✅ Admin alert sent")
+                    logger.info(f"[OK] Admin alert sent")
                 except Exception as e:
-                    logger.error(f"❌ Admin alert failed: {e}")
+                    logger.error(f"[ERROR] Admin alert failed: {e}")
 
         response = {
             "status": "success",
@@ -3926,13 +3926,13 @@ async def purview_webhook(request: Request, db: Session = Depends(get_db)):
             "timestamp": datetime.utcnow().isoformat()
         }
 
-        logger.info(f"✅ Purview webhook processed: {response}")
+        logger.info(f"[OK] Purview webhook processed: {response}")
         return response
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"❌ Purview webhook error: {e}", exc_info=True)
+        logger.error(f"[ERROR] Purview webhook error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/webhook/eventgrid")
@@ -3952,7 +3952,7 @@ async def event_grid_webhook(
         # Handle subscription validation
         if aeg_event_type == "SubscriptionValidation":
             validation_code = payload[0]["data"]["validationCode"]
-            logger.info(f"✅ Validation code: {validation_code}")
+            logger.info(f"[OK] Validation code: {validation_code}")
             return {"validationResponse": validation_code}
 
         # Process events
@@ -4060,9 +4060,9 @@ async def startup():
     logger.info(f"Log Level: {settings.LOG_LEVEL}")
     logger.info(f"Database: {settings.DATABASE_URL[:50]}...")
     logger.info(f"Critical Threshold: {settings.CRITICAL_VIOLATION_THRESHOLD} violations")
-    logger.info(f"Email Notifications: {'✅ Enabled' if EMAIL_ENABLED else '❌ Disabled'}")
-    logger.info(f"Account Revocation: {'✅ Enabled' if settings.FEATURE_ACCOUNT_REVOCATION else '❌ Disabled'}")
-    logger.info(f"Caching: {'✅ Enabled' if settings.CACHE_ENABLED else '❌ Disabled'}")
+    logger.info(f"Email Notifications: {'[ENABLED]' if EMAIL_ENABLED else '[DISABLED]'}")
+    logger.info(f"Account Revocation: {'[ENABLED]' if settings.FEATURE_ACCOUNT_REVOCATION else '[DISABLED]'}")
+    logger.info(f"Caching: {'[ENABLED]' if settings.CACHE_ENABLED else '[DISABLED]'}")
 
     # Validate configuration
     warnings = settings.validate_config()

@@ -748,7 +748,7 @@ async def users_page(db: Session = Depends(get_db)):
     rows_html = ""
     if user_stats:
         for stat in user_stats:
-            risk_level = "Critical" if stat.violation_count >= 3 else ("High" if stat.violation_count >= 2 else "Low")
+            risk_level = "High" if stat.violation_count >= 3 else ("Medium" if stat.violation_count >= 2 else "Low")
             risk_color = "#ef4444" if stat.violation_count >= 3 else ("#ffc107" if stat.violation_count >= 2 else "#10b981")
             last_violation_wib = (stat.last_violation + jakarta_tz).strftime("%Y-%m-%d %H:%M:%S")
             

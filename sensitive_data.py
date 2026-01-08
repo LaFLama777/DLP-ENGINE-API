@@ -207,6 +207,64 @@ class SensitiveDataDetector:
         }
 
     @classmethod
+    def get_detected_items_summary(cls, content: str) -> str:
+        """
+        Generate a detailed summary of detected sensitive data with masking.
+
+        Shows exactly what was detected (e.g., "KTP: 317****9, NPWP: 12****45").
+
+        Args:
+            content: Text content to analyze
+
+        Returns:
+            Human-readable summary of detected items with masking
+
+        Example:
+            >>> content = "Email with KTP 3179123456789012 and NPWP 12.345.678.9-012.345"
+            >>> SensitiveDataDetector.get_detected_items_summary(content)
+            'KTP: 317****2 | NPWP: 12****45'
+        """
+        if not content:
+            return "No data detected"
+
+        detected_items = []
+
+        # Detect and mask KTP
+        ktp_matches = cls.detect_ktp(content)
+        for ktp in ktp_matches:
+            masked_ktp = ktp[:3] + "****" + ktp[-1]  # Show first 3 and last 1 digit
+            detected_items.append(f"KTP: {masked_ktp}")
+
+        # Detect and mask NPWP
+        npwp_matches = cls.detect_npwp(content)
+        for npwp in npwp_matches:
+            # Remove formatting characters for consistent masking
+            clean_npwp = re.sub(r'[\s\.\-]', '', str(npwp))
+            if len(clean_npwp) >= 4:
+                masked_npwp = clean_npwp[:2] + "****" + clean_npwp[-2:]
+            else:
+                masked_npwp = "****"
+            detected_items.append(f"NPWP: {masked_npwp}")
+
+        # Detect and mask Employee IDs
+        emp_id_matches = cls.detect_employee_id(content)
+        for emp_id in emp_id_matches:
+            # Extract just the numeric part for masking
+            numeric_part = re.search(r'(\d+)', emp_id)
+            if numeric_part:
+                nums = numeric_part.group(1)
+                if len(nums) >= 3:
+                    masked_id = emp_id.replace(nums, nums[0] + "****" + nums[-1])
+                else:
+                    masked_id = emp_id.replace(nums, "****")
+                detected_items.append(f"Employee ID: {masked_id}")
+
+        if not detected_items:
+            return "Sensitive data detected (masked for security)"
+
+        return " | ".join(detected_items)
+
+    @classmethod
     def mask_email(cls, email: str) -> str:
         """
         Mask an email address for privacy protection.

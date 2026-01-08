@@ -42,7 +42,7 @@ class OffenseHistory:
 class RiskAssessment:
     """Dataclass representing the final risk assessment output."""
     score: int  # Calculated risk score (0-100)
-    risk_level: str  # e.g., 'Low', 'Medium', 'High', 'Critical'
+    risk_level: str  # e.g., 'Low', 'Medium', 'High'
     remediation_action: str  # e.g., 'Warn & Educate', 'Soft Remediation', 'Hard Block'
 
 class AdvancedDecisionEngine:
@@ -110,16 +110,14 @@ class AdvancedDecisionEngine:
         - score (int): The risk score (0-100).
         
         Returns:
-        - str: The risk level ('Low', 'Medium', 'High', or 'Critical').
+        - str: The risk level ('Low', 'Medium', or 'High').
         """
         if score < 30:
             return 'Low'
         elif score < 60:
             return 'Medium'
-        elif score < 80:
-            return 'High'
         else:
-            return 'Critical'
+            return 'High'
     
     def get_remediation_action(self, score: int) -> str:
         """
